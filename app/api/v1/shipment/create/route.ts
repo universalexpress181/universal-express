@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
-import { generateProfessionalAWB } from '@/lib/awbGenerator'; 
+import { generateProfessionalAWB } from '@/lib/awbGenerator'; // Keeping import as requested
 
 // Initialize Supabase Admin Client
 const supabaseAdmin = createClient(
@@ -44,7 +44,7 @@ export async function POST(request: Request) {
     const generatedResponseData = [];
 
     // ---------------------------------------------------------
-    // 3. LOOP & PROCESS
+    // 3. LOOP & PROCESS (No Wallet/Cost Logic)
     // ---------------------------------------------------------
     
     let loopCounter = 0;
@@ -57,38 +57,34 @@ export async function POST(request: Request) {
             throw new Error(`Missing required fields for receiver: ${item.receiver_name || 'Unknown'}`);
         }
 
-        // --- A. GENERATE UNIQUE AWB (USING LIB + STRICT 11 DIGITS) ---
-        
-        // 1. Get base code from your library
-        const baseCode = generateProfessionalAWB(); 
-        
-        // 2. Clean it: Remove non-alphanumeric chars to be safe
-        const cleanBase = baseCode.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+        // --- A. GENERATE UNIQUE AWB (Strict 11-Digit Format) ---
+        // Format: UNI (3 chars) + Random (5 digits) + Counter (3 digits) = 11 Characters Total
+        // We generate a NEW random number for every item to avoid duplicates.
+        const prefix = "UNI";
+        const randomPart = Math.floor(10000 + Math.random() * 90000).toString(); // Always 5 digits
+        const counterPart = String(loopCounter).padStart(3, '0'); // Always 3 digits (e.g. 001, 002)
 
-        // 3. Trim or Pad to exactly 8 characters
-        //    (If your lib gives 12 chars, we take first 8. If 6 chars, we add 00.)
-        const safeBase = cleanBase.length >= 8 
-            ? cleanBase.substring(0, 8) 
-            : cleanBase.padEnd(8, '0');
-
-        // 4. Append 3-digit Counter (001, 002...) to guarantee uniqueness
-        const counterPart = String(loopCounter).padStart(3, '0');
-
-        // Total Length: 8 (from lib) + 3 (counter) = 11 Characters
-        const awb = `${safeBase}${counterPart}`;
+        const awb = `${prefix}${randomPart}${counterPart}`;
 
         // --- B. HANDLE PAYMENT MODE (Prepaid or COD) ---
+        // Normalize input to uppercase to handle 'cod', 'COD', 'prepaid', 'Prepaid'
         const inputMode = (item.payment_mode || 'Prepaid').toUpperCase();
+        
+        // Strict check: If it's COD, set to COD. Everything else defaults to Prepaid.
         const mode = inputMode === 'COD' ? 'COD' : 'Prepaid';
 
+        // Capture COD Amount only if mode is COD
         const codAmount = mode === 'COD' ? (parseFloat(item.cod_amount) || 0) : 0;
         const declaredValue = parseFloat(item.declared_value) || 0;
 
         // --- C. PREPARE DATABASE ROW ---
+        // Note: We are manually selecting fields here. 
+        // Any extra fields like 'order_id' or 'serial_no' in 'item' are automatically IGNORED.
         insertData.push({
             user_id: userId,
             awb_code: awb,
             
+            // Sender
             sender_name: item.sender_name,
             sender_phone: item.sender_phone,
             sender_address: item.sender_address,
@@ -96,6 +92,7 @@ export async function POST(request: Request) {
             sender_state: item.sender_state,
             sender_pincode: item.sender_pincode,
             
+            // Receiver
             receiver_name: item.receiver_name,
             receiver_phone: item.receiver_phone,
             receiver_address: item.receiver_address,
@@ -103,9 +100,11 @@ export async function POST(request: Request) {
             receiver_state: item.receiver_state,
             receiver_pincode: item.receiver_pincode,
             
+            // Package
             weight: parseFloat(item.weight) || 0.5,
             package_type: item.package_type,
             
+            // Payment & Financials (Wallet/Cost logic removed as requested)
             payment_mode: mode,
             cod_amount: codAmount,
             declared_value: declaredValue,
@@ -115,6 +114,7 @@ export async function POST(request: Request) {
             tax_amount: 0,
             cost: 0, 
             
+            // Status
             current_status: 'created',
             payment_status: 'paid' 
         });
@@ -123,7 +123,7 @@ export async function POST(request: Request) {
         generatedResponseData.push({
             awb_code: awb,
             receiver_name: item.receiver_name,
-            payment_mode: mode,
+            payment_mode: mode, // Return the confirmed mode
             cod_amount: codAmount,
             status: "created",
             label_url: `${process.env.NEXT_PUBLIC_SITE_URL}/print/${awb}`
