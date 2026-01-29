@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
-import { generateProfessionalAWB } from '@/lib/awbGenerator';
+import { generateProfessionalAWB } from '@/lib/awbGenerator'; // Keeping import to avoid breaking structure
 
 // Initialize Supabase Admin Client
 const supabaseAdmin = createClient(
@@ -47,20 +47,23 @@ export async function POST(request: Request) {
     // 3. LOOP & PROCESS (No Wallet/Cost Logic)
     // ---------------------------------------------------------
     
-    // 👇 FIX: Counter ensures unique IDs even if loop runs in the same millisecond
     let loopCounter = 0;
 
     for (const item of shipmentsToProcess) {
-        loopCounter++; // Increment 1, 2, 3... for each item
+        loopCounter++; 
 
         // Basic Validation
         if (!item.sender_name || !item.receiver_name || !item.receiver_address || !item.package_type) {
             throw new Error(`Missing required fields for receiver: ${item.receiver_name || 'Unknown'}`);
         }
 
-        // --- A. GENERATE UNIQUE AWB ---
-        // We append the loopCounter to ensure uniqueness during bulk uploads
-        const awb = `${generateProfessionalAWB()}${Math.floor(Math.random() * 100)}${loopCounter}`;
+        // --- A. GENERATE UNIQUE AWB (Strict 11-Digit Format) ---
+        // Format: UNI (3 chars) + Random (5 digits) + Counter (3 digits) = 11 Characters Total
+        const prefix = "UNI";
+        const randomPart = Math.floor(10000 + Math.random() * 90000).toString(); // Always 5 digits
+        const counterPart = String(loopCounter).padStart(3, '0'); // Always 3 digits (e.g. 001, 002)
+
+        const awb = `${prefix}${randomPart}${counterPart}`;
 
         // --- B. HANDLE PAYMENT MODE (Prepaid or COD) ---
         // Normalize input to uppercase to handle 'cod', 'COD', 'prepaid', 'Prepaid'
