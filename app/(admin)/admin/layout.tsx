@@ -95,7 +95,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   if (!authorized) return null;
 
   // --- ANIMATION VARIANTS ---
-  const sidebarVariants = {
+  const sidebarVariants: any = {
     closed: { x: "-100%", transition: { type: "spring" as const, stiffness: 300, damping: 30 } },
     open: { x: 0, transition: { type: "spring" as const, stiffness: 300, damping: 30, staggerChildren: 0.05, delayChildren: 0.1 } }
   };
