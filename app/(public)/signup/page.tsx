@@ -22,19 +22,25 @@ export default function SignupPage() {
     setLoading(true);
 
     try {
-      // 1. Create Auth User
+      // 1. Create Auth User with Email Confirmation Redirect
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: formData.email,
         password: formData.password,
         options: {
-          data: { name: formData.name, phone: formData.phone }
+          // 👇 This tells Supabase where to send the user after they click the email link
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
+          data: { 
+            name: formData.name, 
+            phone: formData.phone 
+          }
         }
       });
 
       if (authError) throw authError;
 
+      // 2. Handle Profile Creation
       if (authData.user) {
-        // 2. Use 'upsert' to prevent duplicate key errors
+        // Use 'upsert' to prevent duplicate key errors if user exists but isn't confirmed
         const { error: profileError } = await supabase
           .from('profiles')
           .upsert({
@@ -45,13 +51,23 @@ export default function SignupPage() {
           });
 
         if (profileError) {
+            // Ignore duplicate key errors (common during re-attempts)
             if (!profileError.message.includes("duplicate key")) {
                 throw profileError;
             }
         }
 
-        alert("Account created successfully! Please log in.");
-        router.push("/login"); // 👈 Changed redirection to Login Page
+        // 3. 👇 NEW SUCCESS LOGIC
+        // We do NOT redirect to login immediately. We ask them to check their email.
+        if (authData.user && !authData.session) {
+           alert("✅ Registration successful! \n\nPlease check your email to confirm your account before logging in.");
+           // Optional: Redirect to a "Check Email" instruction page if you have one
+           // router.push("/auth/verify-email"); 
+        } else {
+           // Fallback: If session exists (e.g., email confirmation is disabled), go to login
+           alert("Account created successfully!");
+           router.push("/login");
+        }
       }
 
     } catch (error: any) {

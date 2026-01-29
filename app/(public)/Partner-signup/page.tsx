@@ -25,11 +25,13 @@ export default function PartnerSignupPage() {
     setLoading(true);
 
     try {
-      // 1. Create Auth User
+      // 1. Create Auth User with Email Redirect
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: formData.email,
         password: formData.password,
         options: {
+            // 👇 Important: Tells Supabase where to verify the user
+            emailRedirectTo: `${window.location.origin}/auth/callback`,
             data: { display_name: formData.businessName }
         }
       });
@@ -52,21 +54,34 @@ export default function PartnerSignupPage() {
             email: formData.email
         });
 
-      if (profileError) throw profileError;
+      if (profileError) {
+        // Ignore "duplicate key" error if user is re-trying signup before confirming email
+        if (!profileError.message.includes("duplicate key")) {
+            throw profileError;
+        }
+      }
 
       // 3. Assign 'seller' Role
+      // Note: If user exists, this might fail on duplicate, so we can use upsert or ignore error safely
       const { error: roleError } = await supabase
         .from('user_roles')
-        .insert({
+        .upsert({
             user_id: userId,
             role: 'seller'
-        });
+        }, { onConflict: 'user_id' }); // Ensure we don't crash on retry
 
       if (roleError) throw roleError;
 
-      // Success!
-      alert("✅ Registration Successful! Please login to access your dashboard.");
-      router.push('/login');
+      // 4. Success Logic
+      if (authData.user && !authData.session) {
+        // Case A: Email Confirmation is ENABLED (Session is null)
+        alert("✅ Registration Successful! \n\nPlease check your email to confirm your partner account before logging in.");
+        // Optional: Redirect to a generic 'check email' page
+      } else {
+        // Case B: Email Confirmation is DISABLED (Session exists)
+        alert("✅ Registration Successful! Please login to access your dashboard.");
+        router.push('/login');
+      }
 
     } catch (error: any) {
       console.error(error);
