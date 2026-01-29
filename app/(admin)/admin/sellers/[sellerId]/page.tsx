@@ -487,7 +487,7 @@ export default function SellerDetailPage({ params }: { params: Promise<{ sellerI
             </div>
         )}
         </AnimatePresence>
-
+      </div>
     </div>
   );
 }
