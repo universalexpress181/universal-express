@@ -44,7 +44,7 @@ export async function POST(request: Request) {
     const generatedResponseData = [];
 
     // ---------------------------------------------------------
-    // 3. LOOP & PROCESS (No Wallet/Cost Logic)
+    // 3. LOOP & PROCESS
     // ---------------------------------------------------------
     
     let loopCounter = 0;
@@ -57,20 +57,24 @@ export async function POST(request: Request) {
             throw new Error(`Missing required fields for receiver: ${item.receiver_name || 'Unknown'}`);
         }
 
-        // --- A. GENERATE UNIQUE AWB (STRICT 11 DIGITS USING LIB) ---
-        // 1. Call your library function
-        const generatedBase = generateProfessionalAWB();
+        // --- A. GENERATE UNIQUE AWB (USING LIB + STRICT 11 DIGITS) ---
         
-        // 2. Ensure the base is exactly 8 characters (Slice if too long, Pad if too short)
-        //    This creates space for the 3-digit counter while keeping the total length at 11.
-        const safeBase = generatedBase.length >= 8 
-            ? generatedBase.slice(0, 8) 
-            : generatedBase.padEnd(8, '0');
+        // 1. Get base code from your library
+        const baseCode = generateProfessionalAWB(); 
+        
+        // 2. Clean it: Remove non-alphanumeric chars to be safe
+        const cleanBase = baseCode.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
 
-        // 3. Append 3-digit counter (e.g., 001, 002)
+        // 3. Trim or Pad to exactly 8 characters
+        //    (If your lib gives 12 chars, we take first 8. If 6 chars, we add 00.)
+        const safeBase = cleanBase.length >= 8 
+            ? cleanBase.substring(0, 8) 
+            : cleanBase.padEnd(8, '0');
+
+        // 4. Append 3-digit Counter (001, 002...) to guarantee uniqueness
         const counterPart = String(loopCounter).padStart(3, '0');
 
-        // Total: 8 + 3 = 11 Characters
+        // Total Length: 8 (from lib) + 3 (counter) = 11 Characters
         const awb = `${safeBase}${counterPart}`;
 
         // --- B. HANDLE PAYMENT MODE (Prepaid or COD) ---
