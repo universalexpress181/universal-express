@@ -10,6 +10,19 @@ import {
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { generateInvoice } from "@/lib/invoiceGenerator"; 
+import { motion, AnimatePresence } from "framer-motion";
+
+// Helper for status colors
+const getStatusColor = (status: string) => {
+  switch (status) {
+    case 'delivered': return 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-400 dark:border-emerald-900/50';
+    case 'cancelled': 
+    case 'rto_initiated': return 'bg-red-100 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-900/50';
+    case 'in_transit': 
+    case 'out_for_delivery': return 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-900/50';
+    default: return 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700';
+  }
+};
 
 export default function SellerDetailPage({ params }: { params: Promise<{ sellerId: string }> }) {
   const router = useRouter();
@@ -133,89 +146,104 @@ export default function SellerDetailPage({ params }: { params: Promise<{ sellerI
   };
 
   if (loading) return (
-    <div className="flex h-[50vh] items-center justify-center text-slate-500">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-[#050b14] text-slate-500">
         <Loader2 className="animate-spin mr-2"/> Loading Partner Profile...
     </div>
   );
 
   return (
-    <div className="max-w-7xl mx-auto space-y-6 pb-20 relative p-4 lg:p-0">
+    <div className="min-h-screen bg-gray-50 dark:bg-[#050b14] transition-colors duration-300 font-sans relative overflow-hidden">
       
-      <Link 
-        href="/admin/sellers" 
-        className="text-slate-400 hover:text-white text-sm flex items-center gap-2 mb-4 inline-flex transition-colors"
-      >
-        <ArrowLeft size={16}/> Back to Partners
-      </Link>
+      {/* 🌟 Ambient Background Glow */}
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-3xl h-64 bg-blue-500/10 dark:bg-blue-500/5 blur-[120px] rounded-full pointer-events-none" />
 
-      {/* 🏢 Header Section */}
-      <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl flex flex-col md:flex-row justify-between items-start md:items-center gap-4 shadow-xl">
-        <div className="flex items-start md:items-center gap-4 w-full">
-            <div className="h-16 w-16 bg-blue-900/20 text-blue-400 rounded-xl flex items-center justify-center border border-blue-900/50 shrink-0">
+      <div className="max-w-7xl mx-auto space-y-6 pb-20 relative p-4 lg:p-8 z-10">
+      
+        <Link 
+          href="/admin/sellers" 
+          className="group inline-flex items-center gap-2 text-sm font-medium text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white mb-4 transition-colors"
+        >
+          <div className="p-1 rounded-full group-hover:bg-slate-200 dark:group-hover:bg-slate-800 transition-colors">
+            <ArrowLeft size={16}/>
+          </div>
+          Back to Partners
+        </Link>
+
+        {/* 🏢 Header Section - Glassmorphism */}
+        <div className="bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl border border-gray-200 dark:border-slate-800 p-6 rounded-3xl flex flex-col md:flex-row justify-between items-start md:items-center gap-6 shadow-sm dark:shadow-2xl">
+          <div className="flex items-start md:items-center gap-5 w-full">
+            <div className="h-16 w-16 bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-blue-900/30 dark:to-indigo-900/30 text-blue-600 dark:text-blue-400 rounded-2xl flex items-center justify-center border border-blue-100 dark:border-blue-800/50 shadow-inner shrink-0">
                 <Building2 size={32} />
             </div>
             <div className="min-w-0 flex-1">
-                <h1 className="text-xl md:text-2xl font-bold text-white truncate">
+                <h1 className="text-2xl md:text-3xl font-black text-slate-900 dark:text-white truncate tracking-tight">
                     {profile?.business_name || profile?.company_name || "Unnamed Business"}
                 </h1>
                 
-                {/* ✅ UPDATED HEADER DETAILS WITH OWNER NAME */}
-                <div className="flex flex-wrap items-center gap-2 text-slate-400 text-sm mt-1">
-                    <span className="flex items-center gap-1 whitespace-nowrap"><ShieldCheck size={14} className="text-green-500"/> Verified</span>
+                {/* Header Details */}
+                <div className="flex flex-wrap items-center gap-3 text-sm mt-2">
+                    <span className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800 font-medium text-xs">
+                        <ShieldCheck size={12} strokeWidth={3}/> Verified
+                    </span>
                     
-                    <span className="hidden md:inline text-slate-600">•</span>
-                    <span className="truncate max-w-[200px] block md:inline">{profile?.email}</span>
+                    <span className="hidden md:inline text-slate-300 dark:text-slate-700">|</span>
+                    <span className="text-slate-600 dark:text-slate-400 font-medium">{profile?.email}</span>
                     
-                    <span className="hidden md:inline text-slate-600">•</span>
-                    <span className="flex items-center gap-1 text-slate-300">
-                        <User size={14} className="text-slate-500"/> 
-                        Owner: {profile?.full_name || "Unknown"}
+                    <span className="hidden md:inline text-slate-300 dark:text-slate-700">|</span>
+                    <span className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400">
+                        <User size={14} className="text-slate-400 dark:text-slate-500"/> 
+                        Owner: <span className="text-slate-700 dark:text-slate-300 font-medium">{profile?.full_name || "Unknown"}</span>
                     </span>
                 </div>
-
             </div>
+          </div>
         </div>
-      </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
-        {/* 🔑 Left Column: API & Contact Info */}
-        <div className="lg:col-span-1 space-y-6">
-            <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl shadow-lg">
-                <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-white font-bold flex items-center gap-2">
-                        <Key size={18} className="text-yellow-500"/> Integration
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          
+          {/* 🔑 Left Column: API & Contact Info */}
+          <div className="lg:col-span-1 space-y-6">
+            <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 p-6 rounded-3xl shadow-sm dark:shadow-xl h-full flex flex-col">
+                <div className="flex justify-between items-center mb-6">
+                    <h3 className="text-slate-900 dark:text-white font-bold flex items-center gap-2">
+                        <div className="p-1.5 bg-yellow-100 dark:bg-yellow-900/30 rounded-lg">
+                            <Key size={16} className="text-yellow-600 dark:text-yellow-500"/> 
+                        </div>
+                        Integration
                     </h3>
-                    {/* Regenerate Button (Small) */}
+                    {/* Regenerate Button */}
                     {apiKey && (
                         <button 
                             onClick={handleGenerateKey}
                             disabled={generating}
-                            className="text-xs text-slate-500 hover:text-white flex items-center gap-1"
+                            className="text-xs font-medium text-slate-500 hover:text-red-600 dark:text-slate-400 dark:hover:text-red-400 flex items-center gap-1.5 px-2 py-1 rounded-md hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
                         >
-                            {generating ? <Loader2 className="animate-spin" size={12}/> : <RefreshCw size={12}/>} Reset
+                            {generating ? <Loader2 className="animate-spin" size={12}/> : <RefreshCw size={12}/>} Reset Key
                         </button>
                     )}
                 </div>
                 
                 {/* API Key Box */}
                 {apiKey ? (
-                    <div className="bg-black/50 p-3 rounded-lg border border-slate-800 mb-4 flex justify-between items-center overflow-hidden">
-                        <code className="text-xs text-slate-300 font-mono truncate flex-1 min-w-0 mr-2">
-                            {apiKey}
-                        </code>
-                        <button onClick={copyKey} className="shrink-0 p-1 hover:bg-slate-800 rounded">
-                            {copied ? <Check size={14} className="text-green-500"/> : <Copy size={14} className="text-slate-400 hover:text-white"/>}
-                        </button>
+                    <div className="relative group">
+                        <div className="bg-slate-100 dark:bg-black/40 p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 flex justify-between items-center overflow-hidden">
+                            <code className="text-xs text-slate-600 dark:text-slate-300 font-mono truncate flex-1 min-w-0 mr-2 tracking-wide">
+                                {apiKey}
+                            </code>
+                            <button onClick={copyKey} className="shrink-0 p-1.5 hover:bg-white dark:hover:bg-slate-700 rounded-lg transition-colors shadow-sm">
+                                {copied ? <Check size={14} className="text-green-500"/> : <Copy size={14} className="text-slate-400 dark:text-slate-500 hover:text-slate-900 dark:hover:text-white"/>}
+                            </button>
+                        </div>
+                        <p className="text-[10px] text-slate-400 mt-2 px-1">Use this secret key for server-side integration.</p>
                     </div>
                 ) : (
                     <div className="mb-4">
-                        <div className="p-3 bg-red-900/10 border border-red-900/30 rounded-lg text-center">
-                            <p className="text-xs text-red-400 mb-3">No API Key found.</p>
+                        <div className="p-4 bg-red-50 dark:bg-red-900/10 border border-red-100 dark:border-red-900/30 rounded-xl text-center">
+                            <p className="text-xs font-medium text-red-600 dark:text-red-400 mb-3">No API Key active.</p>
                             <button 
                                 onClick={handleGenerateKey}
                                 disabled={generating}
-                                className="w-full py-2 bg-red-600 hover:bg-red-500 text-white text-xs font-bold rounded flex items-center justify-center gap-2 transition-all"
+                                className="w-full py-2.5 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-lg flex items-center justify-center gap-2 transition-all shadow-lg shadow-red-600/20"
                             >
                                 {generating ? <Loader2 className="animate-spin" size={14}/> : <Key size={14}/>}
                                 Generate Key
@@ -225,108 +253,113 @@ export default function SellerDetailPage({ params }: { params: Promise<{ sellerI
                 )}
 
                 {/* Contact Details */}
-                <div className="space-y-3 pt-4 border-t border-slate-800">
-                    <div className="flex items-start gap-3 text-sm text-slate-400 break-words">
-                        <MapPin size={16} className="mt-1 shrink-0 text-slate-500"/> 
-                        <p>{profile?.address || "No Address Provided"}</p>
+                <div className="mt-auto pt-6 border-t border-gray-100 dark:border-slate-800 space-y-4">
+                    <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Contact Info</h4>
+                    <div className="flex items-start gap-3 text-sm text-slate-600 dark:text-slate-400 group">
+                        <MapPin size={18} className="mt-0.5 shrink-0 text-slate-400 group-hover:text-blue-500 transition-colors"/> 
+                        <p className="leading-relaxed">{profile?.address || "No Address Provided"}</p>
                     </div>
-                    <div className="flex items-center gap-3 text-sm text-slate-400">
-                        <Phone size={16} className="text-slate-500 shrink-0"/> 
+                    <div className="flex items-center gap-3 text-sm text-slate-600 dark:text-slate-400 group">
+                        <Phone size={18} className="text-slate-400 shrink-0 group-hover:text-blue-500 transition-colors"/> 
                         <p>{profile?.phone || profile?.phone_number || "No Phone Provided"}</p>
                     </div>
                 </div>
             </div>
-        </div>
+          </div>
 
-        {/* 📦 Right Column: Shipment History Table */}
-        <div className="lg:col-span-2">
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-lg">
-                <div className="p-6 border-b border-slate-800 flex justify-between items-center">
-                    <h3 className="text-white font-bold text-lg">Shipments</h3>
-                    <span className="text-xs text-slate-500 bg-slate-950 px-3 py-1 rounded-full border border-slate-800">
-                        {shipments.length} Total
+          {/* 📦 Right Column: Shipment History Table */}
+          <div className="lg:col-span-2">
+            <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-3xl overflow-hidden shadow-sm dark:shadow-xl h-full flex flex-col">
+                <div className="p-6 border-b border-gray-100 dark:border-slate-800 flex justify-between items-center">
+                    <h3 className="text-slate-900 dark:text-white font-bold text-lg flex items-center gap-2">
+                        <Package className="text-blue-500" size={20}/> Shipments
+                    </h3>
+                    <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-full border border-slate-200 dark:border-slate-700">
+                        {shipments.length} Orders
                     </span>
                 </div>
                 
                 {/* Scrollable Table Container */}
-                <div className="overflow-x-auto custom-scrollbar">
-                    <table className="w-full text-left text-sm text-slate-400 whitespace-nowrap">
-                        <thead className="bg-slate-950 text-slate-500 uppercase font-bold text-xs">
+                <div className="overflow-x-auto custom-scrollbar flex-1">
+                    <table className="w-full text-left text-sm whitespace-nowrap">
+                        <thead className="bg-gray-50 dark:bg-slate-950/50 text-slate-500 dark:text-slate-400 uppercase font-bold text-[11px] tracking-wider border-b border-gray-200 dark:border-slate-800">
                             <tr>
-                                <th className="p-4">AWB Code</th>
+                                <th className="p-4 pl-6">AWB Code</th>
                                 <th className="p-4">Receiver</th>
                                 <th className="p-4">Status</th>
                                 <th className="p-4 text-center">Actions</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-slate-800">
+                        <tbody className="divide-y divide-gray-100 dark:divide-slate-800">
                             {shipments.length === 0 ? (
                                 <tr>
-                                    <td colSpan={4} className="p-8 text-center text-slate-500">
-                                        No shipments found for this partner.
+                                    <td colSpan={4} className="p-12 text-center flex flex-col items-center justify-center text-slate-500">
+                                        <Package size={48} className="mb-3 opacity-20"/>
+                                        <p>No shipments found for this partner.</p>
                                     </td>
                                 </tr>
                             ) : (
                                 shipments.map((ship) => (
-                                    <tr key={ship.id} className="hover:bg-slate-800/50 transition-colors">
+                                    <tr key={ship.id} className="hover:bg-blue-50/50 dark:hover:bg-slate-800/40 transition-colors group">
                                         
                                         {/* AWB Column */}
-                                        <td className="p-4 font-mono text-white font-medium">
-                                            {ship.awb_code}
-                                            <div className="text-[10px] text-slate-600 font-normal">
-                                                {new Date(ship.created_at).toLocaleDateString()}
+                                        <td className="p-4 pl-6">
+                                            <div className="font-mono text-slate-900 dark:text-white font-medium group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                                                {ship.awb_code}
+                                            </div>
+                                            <div className="text-[10px] text-slate-500 mt-0.5">
+                                                {new Date(ship.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
                                             </div>
                                         </td>
                                         
                                         {/* Receiver Column */}
-                                        <td className="p-4 text-white max-w-[150px] truncate">
-                                            {ship.receiver_name}
-                                            <div className="text-[10px] text-slate-500 truncate">
-                                                {ship.receiver_city}
+                                        <td className="p-4">
+                                            <div className="text-slate-700 dark:text-slate-200 font-medium max-w-[150px] truncate">
+                                                {ship.receiver_name}
+                                            </div>
+                                            <div className="text-[10px] text-slate-500 truncate flex items-center gap-1">
+                                                <MapPin size={10}/> {ship.receiver_city}
                                             </div>
                                         </td>
                                         
                                         {/* Status Column */}
                                         <td className="p-4">
-                                            <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase border ${
-                                                ship.current_status === 'delivered' ? 'bg-green-900/20 text-green-400 border-green-900/50' : 
-                                                ship.current_status === 'cancelled' ? 'bg-red-900/20 text-red-400 border-red-900/50' :
-                                                'bg-blue-900/20 text-blue-400 border-blue-900/50'
-                                            }`}>
+                                            <span className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase border shadow-sm ${getStatusColor(ship.current_status)}`}>
                                                 {ship.current_status?.replace(/_/g, ' ')}
                                             </span>
                                         </td>
                                         
                                         {/* Actions Column */}
-                                        <td className="p-4 flex justify-center gap-2">
-                                            
-                                            <Link 
-                                                href={`/print/${ship.awb_code}`} 
-                                                target="_blank" 
-                                                className="p-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg border border-slate-700 transition-all"
-                                                title="Print Label"
-                                            >
-                                                <Printer size={16} />
-                                            </Link>
-                                            
-                                            <button 
-                                                onClick={() => generateInvoice(ship, profile)}
-                                                className="p-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg border border-slate-700 transition-all"
-                                                title="Invoice"
-                                            >
-                                                <FileText size={16} />
-                                            </button>
+                                        <td className="p-4">
+                                            <div className="flex justify-center gap-2 opacity-100 sm:opacity-60 sm:group-hover:opacity-100 transition-opacity">
+                                                <Link 
+                                                    href={`/print/${ship.awb_code}`} 
+                                                    target="_blank" 
+                                                    className="p-2 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-lg border border-gray-200 dark:border-slate-700 transition-all shadow-sm"
+                                                    title="Print Label"
+                                                >
+                                                    <Printer size={16} />
+                                                </Link>
+                                                
+                                                <button 
+                                                    onClick={() => generateInvoice(ship, profile)}
+                                                    className="p-2 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-lg border border-gray-200 dark:border-slate-700 transition-all shadow-sm"
+                                                    title="Invoice"
+                                                >
+                                                    <FileText size={16} />
+                                                </button>
 
-                                            <button 
-                                                onClick={() => {
-                                                    setSelectedShipment(ship);
-                                                    setStatusToUpdate(ship.current_status);
-                                                }}
-                                                className="p-2 bg-blue-900/30 hover:bg-blue-600 text-blue-400 hover:text-white border border-blue-900/50 hover:border-blue-500 rounded-lg transition-all"
-                                                title="Manage"
-                                            >
-                                                <ExternalLink size={16} />
-                                            </button>
+                                                <button 
+                                                    onClick={() => {
+                                                        setSelectedShipment(ship);
+                                                        setStatusToUpdate(ship.current_status);
+                                                    }}
+                                                    className="p-2 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/40 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800/50 rounded-lg transition-all shadow-sm"
+                                                    title="Manage"
+                                                >
+                                                    <ExternalLink size={16} />
+                                                </button>
+                                            </div>
                                         </td>
                                     </tr>
                                 ))
@@ -335,79 +368,125 @@ export default function SellerDetailPage({ params }: { params: Promise<{ sellerI
                     </table>
                 </div>
             </div>
+          </div>
         </div>
-      </div>
 
-      {/* 🟦 SIDE PANEL (Responsive Drawer) */}
-      {selectedShipment && (
-        <div className="fixed inset-0 z-50 flex justify-end">
-            <div 
-                className="absolute inset-0 bg-black/80 backdrop-blur-sm transition-opacity" 
-                onClick={() => setSelectedShipment(null)}
-            ></div>
-            
-            <div className="relative w-full md:max-w-md bg-slate-900 h-full border-l border-slate-800 shadow-2xl flex flex-col animate-in slide-in-from-right duration-300">
-                <div className="p-6 border-b border-slate-800 flex justify-between items-center bg-slate-950">
-                    <div>
-                        <h2 className="text-xl font-bold text-white flex items-center gap-2">
-                            <Truck className="text-blue-500"/> Manage Order
-                        </h2>
-                        <p className="text-xs text-slate-500 font-mono mt-1">AWB: {selectedShipment.awb_code}</p>
-                    </div>
-                    <button 
-                        onClick={() => setSelectedShipment(null)} 
-                        className="p-2 hover:bg-slate-800 rounded-full text-slate-400 hover:text-white"
-                    >
-                        <X size={20} />
-                    </button>
-                </div>
-
-                <div className="flex-1 overflow-y-auto p-6 space-y-6">
-                    <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700">
-                        <label className="text-xs font-bold text-slate-400 uppercase mb-2 block flex items-center gap-2">
-                            <AlertTriangle size={14} className="text-yellow-500"/> Update Status
-                        </label>
-                        <select 
-                            value={statusToUpdate}
-                            onChange={(e) => setStatusToUpdate(e.target.value)}
-                            className="w-full bg-slate-950 border border-slate-700 text-white p-3 rounded-lg mb-4 focus:outline-none focus:border-blue-500"
-                        >
-                            <option value="created">Created</option>
-                            <option value="picked_up">Picked Up</option>
-                            <option value="in_transit">In Transit</option>
-                            <option value="out_for_delivery">Out for Delivery</option>
-                            <option value="delivered">Delivered</option>
-                            <option value="cancelled">Cancelled</option>
-                            <option value="rto_initiated">RTO Initiated</option>
-                        </select>
+        {/* 🟦 SIDE PANEL (Responsive Drawer) */}
+        <AnimatePresence>
+        {selectedShipment && (
+            <div className="fixed inset-0 z-50 flex justify-end">
+                <motion.div 
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="absolute inset-0 bg-slate-900/30 dark:bg-black/60 backdrop-blur-sm" 
+                    onClick={() => setSelectedShipment(null)}
+                />
+                
+                <motion.div 
+                    initial={{ x: "100%" }}
+                    animate={{ x: 0 }}
+                    exit={{ x: "100%" }}
+                    transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                    className="relative w-full md:max-w-md bg-white dark:bg-slate-900 h-full border-l border-gray-200 dark:border-slate-800 shadow-2xl flex flex-col"
+                >
+                    <div className="p-6 border-b border-gray-100 dark:border-slate-800 flex justify-between items-center bg-gray-50/50 dark:bg-slate-950/50">
+                        <div>
+                            <h2 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                                <Truck className="text-blue-500" size={20}/> Manage Order
+                            </h2>
+                            <p className="text-xs text-slate-500 dark:text-slate-400 font-mono mt-1">AWB: {selectedShipment.awb_code}</p>
+                        </div>
                         <button 
-                            onClick={handleUpdateStatus} 
-                            disabled={updating || statusToUpdate === selectedShipment.current_status} 
-                            className="w-full py-3 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-lg flex justify-center items-center gap-2 transition-all"
+                            onClick={() => setSelectedShipment(null)} 
+                            className="p-2 hover:bg-gray-200 dark:hover:bg-slate-800 rounded-full text-slate-500 dark:text-slate-400 transition-colors"
                         >
-                            {updating ? <Loader2 className="animate-spin" size={16}/> : <Save size={16}/>} 
-                            Save Changes
+                            <X size={20} />
                         </button>
                     </div>
 
-                    <div className="space-y-4">
-                        <h3 className="font-bold text-white border-b border-slate-800 pb-2">Shipment Details</h3>
-                        <div className="grid grid-cols-2 gap-4 text-sm">
-                            <div><p className="text-xs text-slate-500">Origin</p><p className="text-slate-300">{selectedShipment.sender_city}</p></div>
-                            <div><p className="text-xs text-slate-500">Destination</p><p className="text-slate-300">{selectedShipment.receiver_city}</p></div>
-                            <div><p className="text-xs text-slate-500">Weight</p><p className="text-slate-300">{selectedShipment.weight} KG</p></div>
-                            <div><p className="text-xs text-slate-500">Total Cost</p><p className="text-slate-300">₹{selectedShipment.total_cost}</p></div>
+                    <div className="flex-1 overflow-y-auto p-6 space-y-8">
+                        
+                        {/* Status Updater */}
+                        <div className="bg-blue-50/50 dark:bg-slate-800/50 p-5 rounded-2xl border border-blue-100 dark:border-slate-700">
+                            <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-3 block flex items-center gap-2">
+                                <AlertTriangle size={14} className="text-amber-500"/> Update Status
+                            </label>
+                            
+                            <div className="relative">
+                                <select 
+                                    value={statusToUpdate}
+                                    onChange={(e) => setStatusToUpdate(e.target.value)}
+                                    className="w-full appearance-none bg-white dark:bg-slate-950 border border-gray-200 dark:border-slate-700 text-slate-900 dark:text-white p-3.5 rounded-xl font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer"
+                                >
+                                    <option value="created">Created</option>
+                                    <option value="picked_up">Picked Up</option>
+                                    <option value="in_transit">In Transit</option>
+                                    <option value="out_for_delivery">Out for Delivery</option>
+                                    <option value="delivered">Delivered</option>
+                                    <option value="cancelled">Cancelled</option>
+                                    <option value="rto_initiated">RTO Initiated</option>
+                                </select>
+                                <div className="absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500">
+                                    <RefreshCw size={14}/>
+                                </div>
+                            </div>
+
+                            <button 
+                                onClick={handleUpdateStatus} 
+                                disabled={updating || statusToUpdate === selectedShipment.current_status} 
+                                className="w-full mt-4 py-3 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-xl flex justify-center items-center gap-2 transition-all shadow-lg shadow-blue-600/20"
+                            >
+                                {updating ? <Loader2 className="animate-spin" size={16}/> : <Save size={16}/>} 
+                                Save Changes
+                            </button>
                         </div>
-                        <div className="bg-black/30 p-4 rounded-lg text-sm text-slate-400">
-                            <p><span className="text-slate-500 block text-xs font-bold uppercase">Receiver Name</span> {selectedShipment.receiver_name}</p>
-                            <p className="mt-2"><span className="text-slate-500 block text-xs font-bold uppercase">Full Address</span> {selectedShipment.receiver_address}</p>
-                            <p className="mt-2"><span className="text-slate-500 block text-xs font-bold uppercase">Contact</span> {selectedShipment.receiver_phone}</p>
+
+                        {/* Details */}
+                        <div className="space-y-4">
+                            <h3 className="font-bold text-slate-900 dark:text-white border-b border-gray-100 dark:border-slate-800 pb-2">Shipment Details</h3>
+                            
+                            <div className="grid grid-cols-2 gap-4 text-sm">
+                                <div className="p-3 bg-gray-50 dark:bg-slate-800/50 rounded-lg">
+                                    <p className="text-[10px] text-slate-400 uppercase font-bold mb-1">Origin</p>
+                                    <p className="text-slate-700 dark:text-slate-300 font-medium">{selectedShipment.sender_city}</p>
+                                </div>
+                                <div className="p-3 bg-gray-50 dark:bg-slate-800/50 rounded-lg">
+                                    <p className="text-[10px] text-slate-400 uppercase font-bold mb-1">Destination</p>
+                                    <p className="text-slate-700 dark:text-slate-300 font-medium">{selectedShipment.receiver_city}</p>
+                                </div>
+                                <div className="p-3 bg-gray-50 dark:bg-slate-800/50 rounded-lg">
+                                    <p className="text-[10px] text-slate-400 uppercase font-bold mb-1">Weight</p>
+                                    <p className="text-slate-700 dark:text-slate-300 font-medium">{selectedShipment.weight} KG</p>
+                                </div>
+                                <div className="p-3 bg-gray-50 dark:bg-slate-800/50 rounded-lg">
+                                    <p className="text-[10px] text-slate-400 uppercase font-bold mb-1">Total Cost</p>
+                                    <p className="text-slate-700 dark:text-slate-300 font-medium">₹{selectedShipment.total_cost}</p>
+                                </div>
+                            </div>
+
+                            <div className="bg-gray-100 dark:bg-black/30 p-5 rounded-xl text-sm border border-gray-200 dark:border-slate-800">
+                                <div className="space-y-4">
+                                    <div>
+                                        <span className="text-slate-500 dark:text-slate-500 block text-[10px] font-bold uppercase mb-0.5">Receiver Name</span> 
+                                        <span className="text-slate-900 dark:text-slate-200 font-medium">{selectedShipment.receiver_name}</span>
+                                    </div>
+                                    <div>
+                                        <span className="text-slate-500 dark:text-slate-500 block text-[10px] font-bold uppercase mb-0.5">Full Address</span> 
+                                        <span className="text-slate-700 dark:text-slate-300 leading-relaxed">{selectedShipment.receiver_address}</span>
+                                    </div>
+                                    <div>
+                                        <span className="text-slate-500 dark:text-slate-500 block text-[10px] font-bold uppercase mb-0.5">Contact</span> 
+                                        <span className="text-slate-900 dark:text-slate-200 font-mono">{selectedShipment.receiver_phone}</span>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
-                </div>
+                </motion.div>
             </div>
-        </div>
-      )}
+        )}
+        </AnimatePresence>
 
     </div>
   );
