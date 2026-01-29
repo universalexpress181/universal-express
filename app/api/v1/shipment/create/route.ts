@@ -46,15 +46,21 @@ export async function POST(request: Request) {
     // ---------------------------------------------------------
     // 3. LOOP & PROCESS (No Wallet/Cost Logic)
     // ---------------------------------------------------------
+    
+    // 👇 FIX: Counter ensures unique IDs even if loop runs in the same millisecond
+    let loopCounter = 0;
+
     for (const item of shipmentsToProcess) {
-        
+        loopCounter++; // Increment 1, 2, 3... for each item
+
         // Basic Validation
         if (!item.sender_name || !item.receiver_name || !item.receiver_address || !item.package_type) {
             throw new Error(`Missing required fields for receiver: ${item.receiver_name || 'Unknown'}`);
         }
 
         // --- A. GENERATE UNIQUE AWB ---
-        const awb = generateProfessionalAWB() + Math.floor(Math.random() * 10);
+        // We append the loopCounter to ensure uniqueness during bulk uploads
+        const awb = `${generateProfessionalAWB()}${Math.floor(Math.random() * 100)}${loopCounter}`;
 
         // --- B. HANDLE PAYMENT MODE (Prepaid or COD) ---
         // Normalize input to uppercase to handle 'cod', 'COD', 'prepaid', 'Prepaid'
@@ -68,6 +74,8 @@ export async function POST(request: Request) {
         const declaredValue = parseFloat(item.declared_value) || 0;
 
         // --- C. PREPARE DATABASE ROW ---
+        // Note: We are manually selecting fields here. 
+        // Any extra fields like 'order_id' or 'serial_no' in 'item' are automatically IGNORED.
         insertData.push({
             user_id: userId,
             awb_code: awb,
