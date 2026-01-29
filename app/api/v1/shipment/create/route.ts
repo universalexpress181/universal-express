@@ -60,7 +60,7 @@ export async function POST(request: Request) {
         // --- A. GENERATE UNIQUE AWB (Strict 11-Digit Format) ---
         // Format: UNI (3 chars) + Random (5 digits) + Counter (3 digits) = 11 Characters Total
         // We generate a NEW random number for every item to avoid duplicates.
-        const prefix = "UNI";
+        const prefix = "UEX";
         const randomPart = Math.floor(10000 + Math.random() * 90000).toString(); // Always 5 digits
         const counterPart = String(loopCounter).padStart(3, '0'); // Always 3 digits (e.g. 001, 002)
 
