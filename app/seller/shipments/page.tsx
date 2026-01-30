@@ -72,7 +72,7 @@ export default function MyOrdersPage() {
   };
 
   const handleCancelOrder = async (orderId: string) => {
-    if (!confirm("Are you sure you want to cancel this shipment? Amount will be refunded to wallet.")) return;
+    if (!confirm("Are you sure you want to cancel this shipment?")) return;
 
     const { error } = await supabase
         .from('shipments')
