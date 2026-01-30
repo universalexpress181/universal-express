@@ -82,8 +82,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     setLoading(false);
   };
 
+  // 👇 UPDATED LOGOUT FUNCTION
   const handleLogout = async () => {
     await supabase.auth.signOut();
+    router.refresh(); // ✨ Forces cache clear
     router.replace("/login");
   };
 

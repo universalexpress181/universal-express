@@ -143,31 +143,40 @@ export default function LandingPage() {
               className="w-full max-w-lg relative group"
             >
               <div className="absolute -inset-1 bg-gradient-to-r from-blue-600 to-cyan-500 rounded-2xl blur opacity-25 group-hover:opacity-50 transition duration-1000"></div>
-              <div className="relative bg-white dark:bg-slate-900 p-2 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl flex items-center">
-                  <div className="pl-4 text-slate-400"><Search size={24} /></div>
+              
+              <div className="relative bg-white dark:bg-slate-900 p-2 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl flex items-center h-16 sm:h-auto">
+                  <div className="pl-4 text-slate-400 shrink-0 flex items-center justify-center">
+                    <Search size={24} />
+                  </div>
                   <input 
                     type="text" 
                     placeholder="Enter AWB or Tracking ID" 
-                    className="w-full p-4 bg-transparent outline-none text-lg font-medium text-slate-900 dark:text-white placeholder:text-slate-400"
+                    className="flex-1 w-full h-full px-4 bg-transparent outline-none text-lg font-medium text-slate-900 dark:text-white placeholder:text-slate-400 min-w-0"
                     value={awb}
                     onChange={(e) => setAwb(e.target.value)}
                   />
-                  <button type="submit" className="bg-slate-900 dark:bg-blue-600 text-white p-3.5 rounded-xl hover:scale-105 active:scale-95 transition-transform shadow-lg">
+                  <button type="submit" className="shrink-0 h-12 w-12 bg-slate-900 dark:bg-blue-600 text-white rounded-xl hover:scale-105 active:scale-95 transition-transform shadow-lg flex items-center justify-center">
                     <ArrowRight size={24} />
                   </button>
               </div>
             </motion.form>
         </div>
 
-        <motion.div 
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1, y: [0, 10, 0] }}
-          transition={{ delay: 1, duration: 2, repeat: Infinity }}
-          className="absolute bottom-10 left-1/2 -translate-x-1/2 cursor-pointer text-slate-400 hover:text-blue-500 transition-colors z-20 p-4"
-          onClick={scrollToFeatures}
-        >
-          <ChevronDown size={32} />
-        </motion.div>
+        {/* 👇 FIXED CHEVRON POSITIONING & ANIMATION */}
+        {/* We use a STATIC wrapper div for centering */}
+        <div className="absolute bottom-10 left-1/2 -translate-x-1/2 z-20">
+          {/* We animate ONLY the bounce (y-axis) inside the wrapper */}
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1, y: [0, 10, 0] }}
+            transition={{ delay: 1, duration: 2, repeat: Infinity }}
+            className="cursor-pointer text-slate-400 hover:text-blue-500 transition-colors p-4"
+            onClick={scrollToFeatures}
+          >
+            <ChevronDown size={32} />
+          </motion.div>
+        </div>
+
       </div>
 
       {/* ================= FEATURES GRID ================= */}
@@ -219,7 +228,6 @@ export default function LandingPage() {
                     <h2 className="text-2xl md:text-3xl font-bold text-slate-900 dark:text-white">Ready to ship?</h2>
                     <p className="text-slate-500 dark:text-slate-400">Join thousands of businesses that trust Universal Express.</p>
                     
-                    {/* ✅ Static Get Started Button */}
                     <button 
                         onClick={() => router.push('/Partner-signup')} 
                         className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3.5 rounded-xl font-bold transition-all shadow-lg hover:shadow-blue-600/30 active:scale-95"

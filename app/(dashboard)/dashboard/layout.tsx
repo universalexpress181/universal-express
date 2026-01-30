@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import Image from "next/image"; // 👈 Import Image
+import Image from "next/image"; 
 import { usePathname, useRouter } from "next/navigation";
 import { 
   LayoutDashboard, 
@@ -40,8 +40,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     }
   }, [pathname, isMobile]);
 
+  // 👇 UPDATED LOGOUT FUNCTION
   const handleLogout = async () => {
     await supabase.auth.signOut();
+    router.refresh(); // ✨ This forces the cache to clear
     router.replace("/login");
   };
 
@@ -81,7 +83,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {/* 📱 MOBILE HEADER */}
       <div className="md:hidden fixed top-0 w-full bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 z-50 px-4 h-16 flex items-center justify-between shadow-sm">
         <div className="flex items-center gap-3">
-            {/* ⚡ UPDATED: Mobile Logo */}
+            {/* ⚡ Mobile Logo */}
             <div className="relative h-8 w-8">
                 <Image 
                     src="/logo.png" 
@@ -127,7 +129,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         {/* Header Logo */}
         <div className="p-6 flex items-center justify-between flex-shrink-0">
           <div className="flex items-center gap-3">
-            {/* ⚡ UPDATED: Sidebar Logo */}
+            {/* ⚡ Sidebar Logo */}
             <div className="relative h-10 w-10">
                 <Image 
                     src="/logo.png" 
