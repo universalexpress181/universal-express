@@ -91,7 +91,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   if (loading) return (
     <div className="min-h-screen bg-slate-50 dark:bg-[#050b14] flex items-center justify-center text-red-600 font-bold tracking-widest animate-pulse">
-        <ShieldAlert className="mr-2" /> VERIFYING CLEARANCE...
+        <ShieldAlert className="mr-2" /> VERIFYING ACCESS...
     </div>
   );
 
