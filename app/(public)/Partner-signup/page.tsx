@@ -62,7 +62,6 @@ export default function PartnerSignupPage() {
       }
 
       // 3. Assign 'seller' Role
-      // Note: If user exists, this might fail on duplicate, so we can use upsert or ignore error safely
       const { error: roleError } = await supabase
         .from('user_roles')
         .upsert({
@@ -72,15 +71,15 @@ export default function PartnerSignupPage() {
 
       if (roleError) throw roleError;
 
-      // 4. Success Logic
+      // 4. ✅ SUCCESS LOGIC (Updated)
+      // If session is null, it means email confirmation is required
       if (authData.user && !authData.session) {
-        // Case A: Email Confirmation is ENABLED (Session is null)
-        alert("✅ Registration Successful! \n\nPlease check your email to confirm your partner account before logging in.");
-        // Optional: Redirect to a generic 'check email' page
+        alert("✅ Partner Registration Successful!\n\nA confirmation mail has been sent to your email.\nPlease check your inbox and confirm your account before logging in.");
+        router.push("/login");
       } else {
-        // Case B: Email Confirmation is DISABLED (Session exists)
-        alert("✅ Registration Successful! Please login to access your dashboard.");
-        router.push('/login');
+        // Fallback for auto-confirmed accounts
+        alert("✅ Partner Account created successfully!");
+        router.push("/login");
       }
 
     } catch (error: any) {

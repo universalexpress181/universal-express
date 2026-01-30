@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
-import { Lock, Mail, User, Phone, Loader2, ArrowRight } from "lucide-react";
+import { Lock, Mail, User, Phone, Loader2 } from "lucide-react";
 import Link from "next/link";
 
 export default function SignupPage() {
@@ -22,12 +22,12 @@ export default function SignupPage() {
     setLoading(true);
 
     try {
-      // 1. Create Auth User with Email Confirmation Redirect
+      // 1. Create Auth User
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: formData.email,
         password: formData.password,
         options: {
-          // 👇 This tells Supabase where to send the user after they click the email link
+          // This ensures they come back to your site after clicking the email link
           emailRedirectTo: `${window.location.origin}/auth/callback`,
           data: { 
             name: formData.name, 
@@ -38,9 +38,8 @@ export default function SignupPage() {
 
       if (authError) throw authError;
 
-      // 2. Handle Profile Creation
+      // 2. Create Profile
       if (authData.user) {
-        // Use 'upsert' to prevent duplicate key errors if user exists but isn't confirmed
         const { error: profileError } = await supabase
           .from('profiles')
           .upsert({
@@ -51,21 +50,22 @@ export default function SignupPage() {
           });
 
         if (profileError) {
-            // Ignore duplicate key errors (common during re-attempts)
+            // Ignore duplicate key errors if user retries
             if (!profileError.message.includes("duplicate key")) {
                 throw profileError;
             }
         }
 
-        // 3. 👇 NEW SUCCESS LOGIC
-        // We do NOT redirect to login immediately. We ask them to check their email.
+        // 3. ✅ SUCCESS LOGIC (Updated for your flow)
+        
+        // If 'authData.session' is null, it means email confirmation is REQUIRED by Supabase
         if (authData.user && !authData.session) {
-           alert("✅ Registration successful! \n\nPlease check your email to confirm your account before logging in.");
-           // Optional: Redirect to a "Check Email" instruction page if you have one
-           // router.push("/auth/verify-email"); 
-        } else {
-           // Fallback: If session exists (e.g., email confirmation is disabled), go to login
-           alert("Account created successfully!");
+           alert("✅ Confirmation mail has been sent!\n\nPlease check your email to confirm your account. You will only be able to login after verification.");
+           router.push("/login"); // Redirect to login page
+        } 
+        else {
+           // Fallback: If email confirmation is disabled in settings, just log them in or send to login
+           alert("✅ Account created successfully!");
            router.push("/login");
         }
       }
@@ -78,14 +78,13 @@ export default function SignupPage() {
   };
 
   return (
-    // 1. Main Container with relative positioning for blobs
     <div className="min-h-screen flex items-center justify-center p-4 transition-colors duration-300 bg-slate-50 dark:bg-slate-950 relative overflow-hidden">
       
-      {/* ✨ MATCHING BACKGROUND DECOR */}
+      {/* BACKGROUND DECOR */}
       <div className="fixed top-[-10%] right-[-5%] w-96 h-96 bg-blue-500/30 dark:bg-blue-600/10 rounded-full blur-3xl pointer-events-none" />
       <div className="fixed bottom-[-10%] left-[-10%] w-[500px] h-[500px] bg-orange-500/20 dark:bg-purple-600/10 rounded-full blur-3xl pointer-events-none" />
 
-      {/* 2. Glassmorphic Card (z-10 ensures it floats above blobs) */}
+      {/* Main Card */}
       <div className="w-full max-w-md rounded-2xl p-8 shadow-2xl transition-colors duration-300 relative z-10
         bg-white/80 border border-slate-200 backdrop-blur-xl
         dark:bg-slate-900/80 dark:border-slate-800">

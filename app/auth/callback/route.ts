@@ -1,70 +1,49 @@
-import { createClient } from '@supabase/supabase-js';
+import { createServerClient } from '@supabase/ssr';
+import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
-
-  // ----------------------------------------------------------------
-  // 1. ERROR HANDLING (Fixes the "otp_expired" issue)
-  // ----------------------------------------------------------------
-  // If Supabase sends an error (like link expired), we catch it here.
+  const code = searchParams.get('code');
   const error = searchParams.get('error');
-  const errorDescription = searchParams.get('error_description');
 
   if (error) {
-    return NextResponse.redirect(
-      `${origin}/auth/auth-code-error?message=${encodeURIComponent(errorDescription || 'Authentication failed')}`
-    );
+    return NextResponse.redirect(`${origin}/auth/auth-code-error?message=Link%20Expired`);
   }
 
-  // ----------------------------------------------------------------
-  // 2. EXCHANGE CODE FOR SESSION
-  // ----------------------------------------------------------------
-  const code = searchParams.get('code');
-
   if (code) {
-    const supabase = createClient(
+    // 👇 FIX: Add 'await' here
+    const cookieStore = await cookies();
+
+    const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          get(name) {
+            return cookieStore.get(name)?.value;
+          },
+          set(name, value, options) {
+            cookieStore.set({ name, value, ...options });
+          },
+          remove(name, options) {
+            cookieStore.delete({ name, ...options });
+          },
+        },
+      }
     );
     
-    // Exchange the auth code for a user session (Log them in)
-    const { data, error: sessionError } = await supabase.auth.exchangeCodeForSession(code);
+    // Verify the Email
+    const { error: sessionError } = await supabase.auth.exchangeCodeForSession(code);
     
-    if (!sessionError && data?.user) {
-      
-      // ----------------------------------------------------------------
-      // 3. FETCH ROLE & REDIRECT
-      // ----------------------------------------------------------------
-      const { data: roleData } = await supabase
-        .from('user_roles')
-        .select('role')
-        .eq('user_id', data.user.id)
-        .single();
+    if (!sessionError) {
+      // Force Logout so they must login manually
+      await supabase.auth.signOut();
 
-      const userRole = roleData?.role;
-      let redirectPath = '/dashboard'; // Default fallback
-
-      // Using your specific routes:
-      switch (userRole) {
-        case 'seller':
-          redirectPath = '/seller';
-          break;
-        case 'admin':
-          redirectPath = '/admin/shipments';
-          break;
-        case 'driver':
-          redirectPath = '/driver';
-          break;
-        default:
-          redirectPath = '/dashboard';
-      }
-
-      // Redirect to the role-specific dashboard
-      return NextResponse.redirect(`${origin}${redirectPath}`);
+      // Redirect to Success Page
+      return NextResponse.redirect(`${origin}/auth/confirmed`);
     }
   }
 
-  // Fallback: If no code exists or exchange failed
-  return NextResponse.redirect(`${origin}/auth/auth-code-error?message=Invalid%20request`);
+  return NextResponse.redirect(`${origin}/auth/auth-code-error?message=Verification%20Failed`);
 }
