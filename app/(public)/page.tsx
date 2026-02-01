@@ -124,7 +124,7 @@ export default function LandingPage() {
               className="text-center space-y-8 mb-12"
             >
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400">
-                  <Globe size={12} className="text-blue-500" /> Universal Express Logistics Partner
+                  <Globe size={12} className="text-blue-500" /> Universal Express
               </div>
               <h1 className="text-5xl md:text-7xl font-black text-slate-900 dark:text-white tracking-tight leading-tight">
                   Track your package <br/>
