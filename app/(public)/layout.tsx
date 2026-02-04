@@ -105,7 +105,7 @@ export default function PublicLayout({ children }: { children: React.ReactNode }
             </div>
             <div>
               <h1 className="text-xl font-black tracking-tight text-slate-900 dark:text-white leading-none">UNIVERSAL</h1>
-              <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 tracking-[0.2em] uppercase mt-0.5">Logistics</p>
+              <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 tracking-[0.2em] uppercase mt-0.5">Express</p>
             </div>
           </Link>
 
