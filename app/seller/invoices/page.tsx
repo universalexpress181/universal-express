@@ -4,8 +4,8 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { generateInvoice } from "@/lib/invoiceGenerator"; 
 import { 
-  FileText, Download, Search, Loader2, User, MapPin, 
-  Receipt, Calendar, Box
+  FileText, Download, Search, Box, User, MapPin, 
+  Calendar, CheckCircle, Wallet, CreditCard
 } from "lucide-react";
 import { motion } from "framer-motion";
 
@@ -41,22 +41,46 @@ export default function InvoicesPage() {
       .single();
     setProfile(profileData);
 
-    // 2. Get Paid Shipments
+    // 2. Get ALL Shipments
     const { data: shipments, error } = await supabase
       .from('shipments')
       .select('*')
       .eq('user_id', user.id)
-      .eq('payment_status', 'paid') 
       .order('created_at', { ascending: false });
 
     if (!error) setInvoices(shipments || []);
   };
 
   const filteredInvoices = invoices.filter(inv => 
-    inv.awb_code.toLowerCase().includes(search.toLowerCase()) ||
-    inv.receiver_name.toLowerCase().includes(search.toLowerCase()) ||
-    inv.receiver_city.toLowerCase().includes(search.toLowerCase())
+    inv.awb_code?.toLowerCase().includes(search.toLowerCase()) ||
+    inv.receiver_name?.toLowerCase().includes(search.toLowerCase()) ||
+    inv.receiver_city?.toLowerCase().includes(search.toLowerCase())
   );
+
+  // 🎨 Payment Mode Badge Helper (Prepaid vs COD)
+  const getPaymentModeBadge = (mode: string) => {
+    const m = mode?.toLowerCase() || "";
+    
+    if (m === "prepaid") {
+      return (
+        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-xs font-bold border border-green-200 dark:border-green-800">
+          <CreditCard size={10} /> Prepaid
+        </span>
+      );
+    }
+    if (m === "cod") {
+      return (
+        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 text-xs font-bold border border-yellow-200 dark:border-yellow-800">
+          <Wallet size={10} /> COD
+        </span>
+      );
+    }
+    return (
+      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-xs font-bold border border-slate-200 dark:border-slate-700">
+        {mode || "Unknown"}
+      </span>
+    );
+  };
 
   return (
     <motion.div 
@@ -74,10 +98,14 @@ export default function InvoicesPage() {
                 <div className="p-2.5 bg-gradient-to-br from-violet-500 to-fuchsia-600 rounded-xl text-white shadow-lg shadow-violet-500/20">
                     <FileText size={24}/>
                 </div>
-                Invoices
+                All Invoices
+                {/* TOTAL COUNT BADGE */}
+                <span className="text-lg text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-full border border-slate-200 dark:border-slate-700">
+                    {filteredInvoices.length}
+                </span>
             </h1>
             <p className="text-slate-500 dark:text-slate-400 text-sm mt-1 font-medium ml-1">
-                Access and download GST compliant tax invoices.
+                View and download invoices for all your shipments.
             </p>
         </div>
       </motion.div>
@@ -104,7 +132,7 @@ export default function InvoicesPage() {
                     <tr>
                         <th className="p-5 pl-6">AWB Number</th>
                         <th className="p-5">Date</th>
-                        <th className="p-5">Sender</th>
+                        <th className="p-5">Type</th> {/* 👈 Renamed Header to Type */}
                         <th className="p-5">Receiver</th>
                         <th className="p-5">City</th>
                         <th className="p-5 text-right pr-6">Download</th>
@@ -148,12 +176,8 @@ export default function InvoicesPage() {
                                     </div>
                                 </td>
                                 <td className="p-5">
-                                    <div className="flex items-center gap-2">
-                                        <User size={14} className="text-slate-400"/> 
-                                        <span className="font-medium text-slate-700 dark:text-slate-200 truncate max-w-[120px]" title={inv.sender_name}>
-                                            {inv.sender_name}
-                                        </span>
-                                    </div>
+                                    {/* 👈 Now using Payment Mode instead of Status */}
+                                    {getPaymentModeBadge(inv.payment_mode)}
                                 </td>
                                 <td className="p-5">
                                     <span className="block font-medium text-slate-700 dark:text-slate-200 truncate max-w-[150px]" title={inv.receiver_name}>
