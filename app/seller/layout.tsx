@@ -8,7 +8,7 @@ import { supabase } from "@/lib/supabase";
 import { 
   LayoutDashboard, Package, Plus, Code, 
   LogOut, Menu, X, User, FileText, Settings, 
-  Moon, Sun 
+  Moon, Sun, FileSpreadsheet // 👈 Imported Icon
 } from "lucide-react";
 import LogoutOnBack from "@/components/LogoutOnBack"; 
 import { motion, AnimatePresence } from "framer-motion";
@@ -186,6 +186,8 @@ export default function SellerLayout({ children }: { children: React.ReactNode }
           
           <NavLink href="/seller" icon={<LayoutDashboard size={20} />} label="Overview" currentPath={pathname} />
           <NavLink href="/seller/create" icon={<Plus size={20} />} label="New Shipment" currentPath={pathname} />
+          {/* 👇 Added Bulk Shipment Link */}
+          <NavLink href="/seller/bulk" icon={<FileSpreadsheet size={20} />} label="Bulk Upload" currentPath={pathname} />
           <NavLink href="/seller/shipments" icon={<Package size={20} />} label="My Orders" currentPath={pathname} />
           
           <div className="h-4"></div> 
