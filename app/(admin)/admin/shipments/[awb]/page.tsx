@@ -61,6 +61,7 @@ export default function AdminShipmentDetail() {
   const [location, setLocation] = useState("Warehouse, Mumbai");
   const [reason, setReason] = useState("");
   const [customTime, setCustomTime] = useState(""); 
+  const [referenceId, setReferenceId] = useState(""); // 🆕 Shipment Reference State
   
   // Staff Assignment
   const [staffList, setStaffList] = useState<any[]>([]);
@@ -90,16 +91,16 @@ export default function AdminShipmentDetail() {
     fetchStaff(); 
     setCustomTime(getLocalNow()); 
 
-    // ✨ REAL-TIME LISTENER: Updates status automatically if changed elsewhere (e.g. Driver App)
+    // ✨ REAL-TIME LISTENER
     const channel = supabase
       .channel('realtime_shipment_detail')
       .on(
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'shipments', filter: `awb_code=eq.${awb}` },
         (payload) => {
-          console.log("Realtime update received:", payload.new);
           setShipment(payload.new);
-          setStatus(payload.new.current_status); // Auto-update dropdown
+          setStatus(payload.new.current_status);
+          setReferenceId(payload.new.reference_id || ""); // Sync reference realtime
           if (payload.new.delivery_boy_id) setAssignedStaff(payload.new.delivery_boy_id);
         }
       )
@@ -135,6 +136,7 @@ export default function AdminShipmentDetail() {
       setShipment(shipData);
       setStatus(shipData.current_status);
       setAssignedStaff(shipData.delivery_boy_id || ""); 
+      setReferenceId(shipData.reference_id || ""); // 🆕 Load reference from DB
       if (shipData.failure_reason) setReason(shipData.failure_reason);
 
       const { data: images } = await supabase.from('pod_images').select('*').eq('shipment_id', shipData.id).order('uploaded_at', { ascending: false });
@@ -153,7 +155,8 @@ export default function AdminShipmentDetail() {
       .from('shipments')
       .update({ 
           current_status: status,
-          failure_reason: failureReasonToSave
+          failure_reason: failureReasonToSave,
+          reference_id: referenceId // 🆕 Save Reference ID to DB
       })
       .eq('id', shipment.id);
 
@@ -174,9 +177,8 @@ export default function AdminShipmentDetail() {
       timestamp: new Date(customTime).toISOString() 
     });
 
-    // We don't need to manually call loadData() here because the Realtime listener will catch the update!
     if (!isFailure) setReason(""); 
-    alert("✅ Status Updated Successfully!");
+    alert("✅ Status & Reference Updated Successfully!");
   };
 
   const handleAssignStaff = async () => {
@@ -206,11 +208,9 @@ export default function AdminShipmentDetail() {
       const fileName = `${awb}-pod-${uniqueId}.${fileExt}`;
 
       const { error: uploadError } = await supabase.storage.from('evidence').upload(fileName, file);
-
       if (uploadError) continue;
 
       const { data: { publicUrl } } = supabase.storage.from('evidence').getPublicUrl(fileName);
-
       await supabase.from('pod_images').insert({ shipment_id: shipment.id, image_url: publicUrl });
     }
 
@@ -237,8 +237,6 @@ export default function AdminShipmentDetail() {
   if (!shipment) return <div className="p-10 text-gray-500">Shipment not found</div>;
 
   const isFailureStatus = ['pickup_failed', 'delivery_failed', 'rto'].includes(status);
-  
-  // ✨ DYNAMIC VISUAL LOGIC
   const isDelivered = shipment.current_status === 'delivered';
 
   return (
@@ -246,11 +244,9 @@ export default function AdminShipmentDetail() {
       initial="hidden" animate="visible" variants={containerVariants}
       className="min-h-screen bg-[#F3F4F6] dark:bg-[#050b14] text-gray-900 dark:text-gray-200 p-4 md:p-8 relative overflow-x-hidden transition-colors duration-500"
     >
-      {/* Background Atmosphere */}
       <div className="fixed top-[-20%] right-[-10%] w-[800px] h-[800px] bg-indigo-200/40 dark:bg-cyan-900/10 rounded-full blur-[150px] pointer-events-none" />
       <div className="fixed bottom-[-20%] left-[-10%] w-[800px] h-[800px] bg-fuchsia-200/40 dark:bg-purple-900/10 rounded-full blur-[150px] pointer-events-none" />
 
-      {/* Back Nav */}
       <motion.div variants={itemVariants}>
         <Link href="/admin/shipments" className="inline-flex items-center gap-2 text-gray-500 hover:text-indigo-600 dark:text-gray-400 dark:hover:text-cyan-400 transition-colors mb-6 group">
             <div className="p-2 rounded-full bg-white dark:bg-[#111827] border border-gray-200 dark:border-gray-800 shadow-sm group-hover:shadow-md transition-all">
@@ -262,12 +258,8 @@ export default function AdminShipmentDetail() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         
-        {/* ================= LEFT COLUMN ================= */}
         <div className="lg:col-span-2 space-y-8">
-            
-            {/* 📦 AWB HEADER CARD */}
             <motion.div variants={itemVariants} className="bg-white/80 dark:bg-[#0a101f]/80 backdrop-blur-xl border border-gray-200 dark:border-[#1e293b] rounded-3xl p-6 shadow-xl relative overflow-hidden">
-                
                 <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-4 mb-8">
                     <div>
                         <p className="text-[10px] text-gray-400 dark:text-gray-500 font-black uppercase tracking-[0.2em] mb-1">TRACKING ID</p>
@@ -278,50 +270,35 @@ export default function AdminShipmentDetail() {
                     </span>
                 </div>
 
-                {/* 📍 Visual Route (DYNAMIC LOGIC) */}
                 <div className="relative bg-gray-50 dark:bg-[#111827] border border-gray-100 dark:border-gray-800 rounded-2xl p-6">
-                    
-                    {/* Vertical Line Logic: 
-                        If Delivered: Solid Color. 
-                        If Not Delivered: Gradient fading down. 
-                    */}
                     <div className={`absolute left-[35px] top-10 bottom-10 w-[2px] 
                         ${isDelivered 
-                            ? 'bg-indigo-500 dark:bg-cyan-500' // Solid line when complete
-                            : 'bg-gradient-to-b from-indigo-400 to-gray-300 dark:from-cyan-600 dark:to-gray-800'} // Gradient when in progress
+                            ? 'bg-indigo-500 dark:bg-cyan-500' 
+                            : 'bg-gradient-to-b from-indigo-400 to-gray-300 dark:from-cyan-600 dark:to-gray-800'} 
                     `}></div>
                     
                     <div className="space-y-10">
-                        {/* Sender Node (Origin Point) */}
                         <div className="relative pl-10">
-                            {/* Logic: If Not Delivered, this is the active point (Lit). If Delivered, it's completed (Solid/Dimmer but okay). 
-                                Prompt says: "if not delivered origin point should be lighted"
-                            */}
                             <div className={`absolute left-0 top-1 w-6 h-6 rounded-full z-10 transition-all duration-500
                                 ${!isDelivered 
-                                    ? 'bg-white dark:bg-[#111827] border-[3px] border-indigo-500 dark:border-cyan-500 shadow-[0_0_15px_rgba(99,102,241,0.6)] dark:shadow-[0_0_15px_rgba(6,182,212,0.6)] scale-110' // Lit
-                                    : 'bg-indigo-500 dark:bg-cyan-500 border-[3px] border-indigo-500 dark:border-cyan-500'} // Completed state
+                                    ? 'bg-white dark:bg-[#111827] border-[3px] border-indigo-500 dark:border-cyan-500 shadow-[0_0_15px_rgba(99,102,241,0.6)] dark:shadow-[0_0_15px_rgba(6,182,212,0.6)] scale-110' 
+                                    : 'bg-indigo-500 dark:bg-cyan-500 border-[3px] border-indigo-500 dark:border-cyan-500'} 
                             `}>
-                                {/* Inner dot if lit */}
                                 {!isDelivered && <div className="absolute inset-0 m-auto w-2 h-2 rounded-full bg-indigo-500 dark:bg-cyan-500 animate-pulse"></div>}
                             </div>
-                            
                             <p className={`text-xs font-bold uppercase tracking-wider mb-1 transition-colors ${!isDelivered ? 'text-indigo-600 dark:text-cyan-400' : 'text-gray-500'}`}>ORIGIN POINT</p>
                             <h3 className="text-lg font-bold text-gray-900 dark:text-white">{shipment.sender_name}</h3>
                             <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">{shipment.sender_address}, {shipment.sender_city}</p>
                         </div>
 
-                        {/* Receiver Node (Destination) */}
                         <div className="relative pl-10">
-                            {/* Logic: "if product is delivered... below circle should be light" */}
                             <div className={`absolute left-0 top-1 w-6 h-6 rounded-full z-10 transition-all duration-500 flex items-center justify-center
                                 ${isDelivered 
-                                    ? 'bg-white dark:bg-[#111827] border-[3px] border-teal-500 dark:border-teal-400 shadow-[0_0_15px_rgba(20,184,166,0.6)] scale-110' // Lit
-                                    : 'bg-gray-200 dark:bg-gray-800 border-[3px] border-gray-400 dark:border-gray-600'} // Dim
+                                    ? 'bg-white dark:bg-[#111827] border-[3px] border-teal-500 dark:border-teal-400 shadow-[0_0_15px_rgba(20,184,166,0.6)] scale-110' 
+                                    : 'bg-gray-200 dark:bg-gray-800 border-[3px] border-gray-400 dark:border-gray-600'} 
                             `}>
                                 {isDelivered && <CheckCircle2 size={14} className="text-teal-500 dark:text-teal-400"/>}
                             </div>
-                            
                             <p className={`text-xs font-bold uppercase tracking-wider mb-1 transition-colors ${isDelivered ? 'text-teal-600 dark:text-teal-400' : 'text-gray-500 dark:text-gray-400'}`}>DESTINATION</p>
                             <h3 className="text-lg font-bold text-gray-900 dark:text-white">{shipment.receiver_name}</h3>
                             <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">{shipment.receiver_address}, {shipment.receiver_city}</p>
@@ -330,7 +307,6 @@ export default function AdminShipmentDetail() {
                 </div>
             </motion.div>
 
-            {/* 📊 PACKAGE SPECS GRID */}
             <motion.div variants={itemVariants} className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <InfoCard icon={<Box size={18}/>} label="Weight" value={`${shipment.weight} kg`} />
                 <InfoCard icon={<Truck size={18}/>} label="Type" value={shipment.package_type} capitalize />
@@ -344,7 +320,6 @@ export default function AdminShipmentDetail() {
                 <InfoCard icon={<MapPin size={18}/>} label="Pincode" value={shipment.receiver_pincode} />
             </motion.div>
 
-            {/* 📷 EVIDENCE GALLERY */}
             <motion.div variants={itemVariants} className="bg-white dark:bg-[#0a101f] border border-gray-200 dark:border-[#1e293b] rounded-3xl p-8 shadow-lg">
                 <h3 className="font-bold text-lg text-gray-900 dark:text-white mb-6 flex items-center gap-2">
                     <ImageIcon size={20} className="text-indigo-500 dark:text-purple-500"/> 
@@ -375,10 +350,8 @@ export default function AdminShipmentDetail() {
             </motion.div>
         </div>
 
-        {/* ================= RIGHT COLUMN: ADMIN ACTIONS ================= */}
         <div className="lg:col-span-1 space-y-6">
             
-            {/* 🛠️ CONTROL PANEL */}
             <motion.div 
                 variants={itemVariants} 
                 className={`border p-6 rounded-3xl transition-colors duration-300 shadow-xl relative overflow-hidden ${
@@ -387,7 +360,6 @@ export default function AdminShipmentDetail() {
                         : 'bg-white dark:bg-[#0a101f] border-gray-200 dark:border-[#1e293b]'
                 }`}
             >
-                {/* Contextual Glow */}
                 <div className={`absolute -top-10 -right-10 w-40 h-40 rounded-full blur-3xl pointer-events-none opacity-20 ${isFailureStatus ? 'bg-red-500' : 'bg-indigo-500 dark:bg-cyan-500'}`} />
 
                 <h3 className={`font-bold mb-6 flex items-center gap-2 text-sm uppercase tracking-widest ${isFailureStatus ? 'text-red-600 dark:text-red-400' : 'text-gray-900 dark:text-white'}`}>
@@ -431,6 +403,20 @@ export default function AdminShipmentDetail() {
                             </motion.div>
                         )}
                     </AnimatePresence>
+
+                    {/* 🆕 SHIPMENT REFERENCE BOX */}
+                    <div>
+                        <label className="text-[10px] text-gray-500 font-bold uppercase mb-1.5 block">Shipment Reference</label>
+                        <div className="relative">
+                            <Activity size={16} className="absolute left-3.5 top-3.5 text-gray-400"/>
+                            <input 
+                                placeholder="e.g. ORD-102, EBAY-99..."
+                                value={referenceId}
+                                onChange={(e) => setReferenceId(e.target.value)}
+                                className={`${inputClass} pl-10`}
+                            />
+                        </div>
+                    </div>
                     
                     <div>
                         <label className="text-[10px] text-gray-500 font-bold uppercase mb-1.5 block">Current Location</label>
@@ -473,7 +459,6 @@ export default function AdminShipmentDetail() {
                 </div>
             </motion.div>
 
-            {/* 👷 DRIVER ASSIGNMENT */}
             <motion.div variants={itemVariants} className="bg-white dark:bg-[#0a101f] border border-gray-200 dark:border-[#1e293b] p-6 rounded-3xl shadow-xl">
                 <h3 className="font-bold mb-4 flex items-center gap-2 text-gray-900 dark:text-white text-sm uppercase tracking-widest">
                     <UserCheck size={18} className="text-teal-500"/> Assign Driver
@@ -498,7 +483,6 @@ export default function AdminShipmentDetail() {
                 </div>
             </motion.div>
 
-            {/* 📂 QUICK ACTIONS */}
             <motion.div variants={itemVariants} className="bg-white dark:bg-[#0a101f] border border-gray-200 dark:border-[#1e293b] p-6 rounded-3xl shadow-xl space-y-3">
                 <h3 className="font-bold mb-2 text-gray-400 text-[10px] uppercase tracking-widest opacity-80">Documents</h3>
                 <button onClick={() => generateInvoice(shipment)} className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 dark:bg-[#111827] dark:hover:bg-gray-800 rounded-xl text-gray-700 dark:text-gray-300 transition-colors border border-gray-200 dark:border-gray-800 text-sm font-medium group">
@@ -526,7 +510,6 @@ export default function AdminShipmentDetail() {
   );
 }
 
-// 📦 HELPER COMPONENT FOR SPECS
 function InfoCard({ icon, label, value, capitalize, valueColor }: any) {
     return (
         <div className="bg-white dark:bg-[#0a101f] border border-gray-200 dark:border-[#1e293b] p-4 rounded-2xl shadow-sm">
