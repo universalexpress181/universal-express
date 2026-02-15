@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { 
   Key, Copy, RefreshCw, Check, Shield, Code, Server, 
   Eye, EyeOff, Box, Layers, Terminal, FileJson, 
-  BookOpen, Globe, Zap, Hash, Coffee, Menu 
+  BookOpen, Globe, Zap, Hash, Coffee, Menu, Search, Truck
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -26,18 +26,16 @@ export default function DeveloperSettings() {
   const [baseUrl, setBaseUrl] = useState("");
   const [showKey, setShowKey] = useState(false);
   
-  // UI States
   const [copiedKey, setCopiedKey] = useState(false);
   const [copiedSnippet, setCopiedSnippet] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
   
-  // Tabs & Config
+  const [apiOperation, setApiOperation] = useState<'create' | 'track_single' | 'track_bulk'>('create');
   const [reqType, setReqType] = useState<'single' | 'bulk'>('single');
   const [lang, setLang] = useState<'curl' | 'node' | 'python' | 'php' | 'csharp' | 'go'>('curl');
   const [viewMode, setViewMode] = useState<'request' | 'response' | 'schema'>('request');
 
   useEffect(() => {
-    // Check if window exists to prevent SSR errors
     if (typeof window !== 'undefined') {
         setBaseUrl(window.location.origin);
     }
@@ -92,15 +90,36 @@ export default function DeveloperSettings() {
 
   // 🧑‍💻 CODE GENERATOR LOGIC
   const getCodeSnippet = () => {
-    const url = `${baseUrl}/api/v1/shipment/create`;
+    let url = "";
+    let method = "POST";
+    let payloadData: any = {};
     const safeKey = apiKey || "YOUR_API_KEY";
-    const payloadData = reqType === 'single' ? singleOrderObj : bulkOrderObj;
+
+    if (apiOperation === 'create') {
+        url = `${baseUrl}/api/v1/shipment/create`;
+        method = "POST";
+        payloadData = reqType === 'single' ? singleOrderObj : bulkOrderObj;
+    } 
+    else if (apiOperation === 'track_single') {
+        url = `${baseUrl}/api/v1/shipment/track?awb=UEX12345678`;
+        method = "GET";
+        payloadData = null; 
+    } 
+    else if (apiOperation === 'track_bulk') {
+        url = `${baseUrl}/api/v1/shipment/track/bulk`;
+        method = "POST";
+        payloadData = { awbs: ["UEX12345678", "UEX87654321", "UEX99887766"] };
+    }
+
     const payloadStr = JSON.stringify(payloadData, null, 2);
 
     switch (lang) {
         case 'curl':
-            return `# Universal integration for any terminal
-curl -X POST "${url}" \\
+            if (method === "GET") {
+                return `curl -X GET "${url}" \\
+  -H "x-api-key: ${safeKey}"`;
+            }
+            return `curl -X POST "${url}" \\
   -H "Content-Type: application/json" \\
   -H "x-api-key: ${safeKey}" \\
   -d '${JSON.stringify(payloadData)}'`;
@@ -108,59 +127,43 @@ curl -X POST "${url}" \\
         case 'node':
             return `const axios = require('axios');
 
-// 1. Setup
 const config = {
-  method: 'post',
+  method: '${method.toLowerCase()}',
   url: '${url}',
   headers: { 
     'Content-Type': 'application/json', 
     'x-api-key': '${safeKey}'
-  },
-  data: ${payloadStr}
+  }${payloadData ? `,\n  data: ${payloadStr}` : ''}
 };
 
-// 2. Execute
 axios(config)
-.then(function (response) {
-  console.log(JSON.stringify(response.data));
-})
-.catch(function (error) {
-  console.log(error);
-});`;
+.then((response) => console.log(JSON.stringify(response.data)))
+.catch((error) => console.log(error));`;
 
         case 'python':
             return `import requests
 import json
 
 url = "${url}"
-
-payload = ${payloadStr}
-
 headers = {
   'Content-Type': 'application/json',
   'x-api-key': '${safeKey}'
 }
-
-response = requests.request("POST", url, headers=headers, json=payload)
+${payloadData ? `payload = ${payloadStr}\n` : ''}
+response = requests.request("${method}", url, headers=headers${payloadData ? ', json=payload' : ''})
 
 print(response.text)`;
 
         case 'php':
             return `<?php
 $curl = curl_init();
-
-$payload = json_encode(${payloadStr});
+${payloadData ? `$payload = json_encode(${payloadStr});` : ''}
 
 curl_setopt_array($curl, array(
   CURLOPT_URL => '${url}',
   CURLOPT_RETURNTRANSFER => true,
-  CURLOPT_ENCODING => '',
-  CURLOPT_MAXREDIRS => 10,
-  CURLOPT_TIMEOUT => 0,
-  CURLOPT_FOLLOWLOCATION => true,
-  CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
-  CURLOPT_CUSTOMREQUEST => 'POST',
-  CURLOPT_POSTFIELDS => $payload,
+  CURLOPT_CUSTOMREQUEST => '${method}',
+  ${payloadData ? `CURLOPT_POSTFIELDS => $payload,` : ''}
   CURLOPT_HTTPHEADER => array(
     'Content-Type: application/json',
     'x-api-key: ${safeKey}'
@@ -171,65 +174,22 @@ $response = curl_exec($curl);
 curl_close($curl);
 echo $response;`;
 
-        case 'csharp':
-            return `var client = new HttpClient();
-var request = new HttpRequestMessage(HttpMethod.Post, "${url}");
-
-request.Headers.Add("x-api-key", "${safeKey}");
-
-var content = new StringContent(
-    ${JSON.stringify(JSON.stringify(payloadData))},
-    null, 
-    "application/json"
-);
-
-request.Content = content;
-var response = await client.SendAsync(request);
-response.EnsureSuccessStatusCode();
-Console.WriteLine(await response.Content.ReadAsStringAsync());`;
-
-        case 'go':
-            return `package main
-
-import (
-  "fmt"
-  "strings"
-  "net/http"
-  "io/ioutil"
-)
-
-func main() {
-  url := "${url}"
-  method := "POST"
-
-  payload := strings.NewReader(\`${JSON.stringify(payloadData)}\`)
-
-  client := &http.Client {}
-  req, err := http.NewRequest(method, url, payload)
-
-  if err != nil { fmt.Println(err); return }
-
-  req.Header.Add("Content-Type", "application/json")
-  req.Header.Add("x-api-key", "${safeKey}")
-
-  res, err := client.Do(req)
-  if err != nil { fmt.Println(err); return }
-  defer res.Body.Close()
-
-  body, err := ioutil.ReadAll(res.Body)
-  if err != nil { fmt.Println(err); return }
-  fmt.Println(string(body))
-}`;
-        default: return "";
+        default: return "// Select a language";
     }
   };
+
+  const getCurrentResponse = () => {
+      if (apiOperation === 'create') return responseJsonCreate;
+      if (apiOperation === 'track_single') return responseJsonTrackSingle;
+      if (apiOperation === 'track_bulk') return responseJsonTrackBulk; // ✅ Updated with new fields
+      return "{}";
+  }
 
   return (
     <motion.div 
       initial="hidden" animate="visible" variants={containerVariants}
       className="max-w-7xl mx-auto space-y-8 md:space-y-10 pb-20 px-4 sm:px-6 lg:px-8 relative"
     >
-      {/* ✨ Background Glows - Hidden on small mobile to save battery/performance */}
       <div className="hidden sm:block fixed top-20 right-20 w-96 h-96 bg-violet-500/10 dark:bg-violet-500/5 rounded-full blur-[100px] pointer-events-none -z-10" />
       <div className="hidden sm:block fixed bottom-20 left-20 w-96 h-96 bg-cyan-500/10 dark:bg-cyan-500/5 rounded-full blur-[100px] pointer-events-none -z-10" />
 
@@ -248,17 +208,9 @@ func main() {
         </div>
       </motion.div>
 
-      {/* 🛠️ INTEGRATION STEPS - Stack on mobile, Grid on desktop */}
-      <motion.div variants={itemVariants} className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <StepCard number="1" title="Get API Key" desc="Generate your x-api-key below. This token authenticates your account." />
-          <StepCard number="2" title="Send JSON Payload" desc="POST your order data to our endpoint. We support Single & Bulk arrays." />
-          <StepCard number="3" title="Handle Response" desc="Store the returned AWB code and Label URL in your database." />
-      </motion.div>
-
-      {/* 🔑 API KEY SECTION - Responsive Flex */}
-      <motion.div variants={itemVariants} className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border border-slate-200 dark:border-slate-800 rounded-2xl md:rounded-3xl p-5 md:p-8 shadow-xl shadow-slate-200/50 dark:shadow-none relative overflow-hidden">
+      {/* 🔑 API KEY SECTION */}
+      <motion.div variants={itemVariants} className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border border-slate-200 dark:border-slate-800 rounded-2xl md:rounded-3xl p-5 md:p-8 shadow-xl relative overflow-hidden">
         <div className="absolute top-0 left-0 w-1.5 h-full bg-gradient-to-b from-yellow-400 to-orange-500"></div>
-        
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
             <div>
                 <h3 className="text-base md:text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
@@ -276,8 +228,6 @@ func main() {
                 <RefreshCw size={14} className={regenerating ? "animate-spin" : ""} /> Regenerate Key
             </button>
         </div>
-
-        {/* Responsive Key Display */}
         <div className="bg-slate-50 dark:bg-black/40 border border-slate-200 dark:border-slate-800 rounded-xl p-3 md:p-2 flex flex-col md:flex-row items-center justify-between gap-3">
             <div className="w-full md:flex-1 px-2 md:px-4 py-2 font-mono text-slate-600 dark:text-slate-300 text-xs md:text-sm lg:text-base break-all flex items-center justify-between md:justify-start gap-3">
                 <span className={showKey ? "" : "blur-sm select-none transition-all duration-300"}>
@@ -298,47 +248,63 @@ func main() {
         </div>
       </motion.div>
 
-      {/* 💻 CODE & DOCS SECTION - Stack order change on mobile */}
+      {/* 💻 CODE & DOCS SECTION */}
       <motion.div variants={itemVariants} className="grid grid-cols-1 lg:grid-cols-12 gap-6 md:gap-8">
         
-        {/* LEFT: CONTROLS & INFO (On mobile: Top) */}
+        {/* LEFT: CONTROLS & INFO */}
         <div className="lg:col-span-4 space-y-6">
             <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur border border-slate-200 dark:border-slate-800 rounded-2xl p-5 md:p-6 shadow-sm">
                 <h3 className="font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
                     <Terminal size={18} className="text-blue-500"/> Integration Config
                 </h3>
                 
-                {/* 1. Request Type */}
+                {/* 1. API OPERATION SELECTION */}
                 <div className="mb-6">
-                    <label className="text-[10px] md:text-xs font-bold text-slate-400 uppercase mb-2 block">Payload Mode</label>
-                    <div className="flex bg-slate-100 dark:bg-slate-950 p-1 rounded-xl">
-                        <button onClick={() => setReqType('single')} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${reqType === 'single' ? 'bg-white dark:bg-slate-800 shadow text-blue-600 dark:text-blue-400' : 'text-slate-500'}`}>
-                            <Box size={14}/> Single
+                    <label className="text-[10px] md:text-xs font-bold text-slate-400 uppercase mb-2 block">Endpoint</label>
+                    <div className="grid grid-cols-1 gap-2">
+                        <button onClick={() => setApiOperation('create')} className={`px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-start gap-3 border ${apiOperation === 'create' ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-500 text-blue-600 dark:text-blue-400' : 'bg-slate-50 dark:bg-slate-950 border-transparent text-slate-500 hover:bg-slate-100'}`}>
+                            <Box size={14}/> Create Shipment
                         </button>
-                        <button onClick={() => setReqType('bulk')} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${reqType === 'bulk' ? 'bg-white dark:bg-slate-800 shadow text-purple-600 dark:text-purple-400' : 'text-slate-500'}`}>
-                            <Layers size={14}/> Bulk
+                        <button onClick={() => setApiOperation('track_single')} className={`px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-start gap-3 border ${apiOperation === 'track_single' ? 'bg-orange-50 dark:bg-orange-900/20 border-orange-500 text-orange-600 dark:text-orange-400' : 'bg-slate-50 dark:bg-slate-950 border-transparent text-slate-500 hover:bg-slate-100'}`}>
+                            <Search size={14}/> Track Single
+                        </button>
+                        <button onClick={() => setApiOperation('track_bulk')} className={`px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-start gap-3 border ${apiOperation === 'track_bulk' ? 'bg-purple-50 dark:bg-purple-900/20 border-purple-500 text-purple-600 dark:text-purple-400' : 'bg-slate-50 dark:bg-slate-950 border-transparent text-slate-500 hover:bg-slate-100'}`}>
+                            <Layers size={14}/> Track Bulk
                         </button>
                     </div>
                 </div>
 
-                {/* 2. Language */}
+                {/* 2. Create Options */}
+                {apiOperation === 'create' && (
+                    <div className="mb-6 animate-in fade-in slide-in-from-top-2">
+                        <label className="text-[10px] md:text-xs font-bold text-slate-400 uppercase mb-2 block">Creation Mode</label>
+                        <div className="flex bg-slate-100 dark:bg-slate-950 p-1 rounded-xl">
+                            <button onClick={() => setReqType('single')} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${reqType === 'single' ? 'bg-white dark:bg-slate-800 shadow text-slate-900 dark:text-white' : 'text-slate-500'}`}>
+                                Single
+                            </button>
+                            <button onClick={() => setReqType('bulk')} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${reqType === 'bulk' ? 'bg-white dark:bg-slate-800 shadow text-slate-900 dark:text-white' : 'text-slate-500'}`}>
+                                Bulk Array
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+                {/* 3. Language */}
                 <div>
-                    <label className="text-[10px] md:text-xs font-bold text-slate-400 uppercase mb-2 block">Platform / Language</label>
+                    <label className="text-[10px] md:text-xs font-bold text-slate-400 uppercase mb-2 block">Language</label>
                     <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1 custom-scrollbar">
-                        <LanguageOption label="cURL / Shell" icon="🐚" active={lang === 'curl'} onClick={() => setLang('curl')} />
-                        <LanguageOption label="Node.js (Axios)" icon="🟩" active={lang === 'node'} onClick={() => setLang('node')} />
-                        <LanguageOption label="Python (Requests)" icon="🐍" active={lang === 'python'} onClick={() => setLang('python')} />
-                        <LanguageOption label="PHP (cURL)" icon="🐘" active={lang === 'php'} onClick={() => setLang('php')} />
-                        <LanguageOption label="C# (.NET)" icon="#️⃣" active={lang === 'csharp'} onClick={() => setLang('csharp')} />
-                        <LanguageOption label="Go (Golang)" icon="🔵" active={lang === 'go'} onClick={() => setLang('go')} />
+                        <LanguageOption label="cURL" icon="🐚" active={lang === 'curl'} onClick={() => setLang('curl')} />
+                        <LanguageOption label="Node.js" icon="🟩" active={lang === 'node'} onClick={() => setLang('node')} />
+                        <LanguageOption label="Python" icon="🐍" active={lang === 'python'} onClick={() => setLang('python')} />
+                        <LanguageOption label="PHP" icon="🐘" active={lang === 'php'} onClick={() => setLang('php')} />
                     </div>
                 </div>
             </div>
 
-            {/* Endpoints Info */}
+            {/* Endpoints Info List */}
             <div className="bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 p-5 rounded-2xl">
                 <h4 className="font-bold text-slate-900 dark:text-white text-sm mb-3 flex items-center gap-2">
-                    <Server size={16} className="text-violet-500"/> API Endpoints
+                    <Server size={16} className="text-violet-500"/> Available Endpoints
                 </h4>
                 <div className="space-y-3">
                     <div className="text-xs">
@@ -352,19 +318,28 @@ func main() {
                     <div className="text-xs">
                         <div className="flex flex-wrap items-center gap-2 mb-1">
                             <span className="bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 px-1.5 py-0.5 rounded font-black text-[10px]">GET</span>
-                            <span className="font-mono text-slate-600 dark:text-slate-300 break-all">/api/v1/shipment/track/[awb]</span>
+                            <span className="font-mono text-slate-600 dark:text-slate-300 break-all">/api/v1/shipment/track?awb=...</span>
                         </div>
-                        <p className="text-slate-500 dark:text-slate-400 leading-tight">Get live status & timeline.</p>
+                        <p className="text-slate-500 dark:text-slate-400 leading-tight">Track a single shipment via Query Param.</p>
+                    </div>
+                    {/* 🆕 BULK TRACKING ENDPOINT */}
+                    <div className="h-px bg-slate-200 dark:bg-slate-800"></div>
+                    <div className="text-xs">
+                        <div className="flex flex-wrap items-center gap-2 mb-1">
+                            <span className="bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 px-1.5 py-0.5 rounded font-black text-[10px]">POST</span>
+                            <span className="font-mono text-slate-600 dark:text-slate-300 break-all">/api/v1/shipment/track/bulk</span>
+                        </div>
+                        <p className="text-slate-500 dark:text-slate-400 leading-tight">Track up to 100 AWBs. Returns status & history.</p>
                     </div>
                 </div>
             </div>
         </div>
 
-        {/* RIGHT: CODE & SCHEMA (On mobile: Bottom) */}
+        {/* RIGHT: CODE & SCHEMA */}
         <div className="lg:col-span-8">
             <div className="bg-slate-900 rounded-2xl md:rounded-3xl border border-slate-800 shadow-2xl overflow-hidden flex flex-col h-full min-h-[500px] md:min-h-[600px]">
                 
-                {/* Editor Tabs - Horizontally scrollable on mobile */}
+                {/* Editor Tabs */}
                 <div className="flex items-center justify-between px-4 md:px-6 py-4 border-b border-slate-800 bg-slate-950/50">
                     <div className="flex gap-2 overflow-x-auto no-scrollbar">
                         <TabButton active={viewMode === 'request'} onClick={() => setViewMode('request')} label="Request Code" icon={Code}/>
@@ -373,7 +348,7 @@ func main() {
                     </div>
                     {viewMode !== 'schema' && (
                         <button 
-                            onClick={() => copyToClipboard(viewMode === 'request' ? getCodeSnippet() || "" : responseJson, false)}
+                            onClick={() => copyToClipboard(viewMode === 'request' ? getCodeSnippet() || "" : getCurrentResponse(), false)}
                             className="hidden md:flex items-center gap-2 text-xs font-bold text-slate-400 hover:text-white transition-colors ml-4 shrink-0"
                         >
                             {copiedSnippet ? <Check size={14} className="text-green-500"/> : <Copy size={14}/>}
@@ -385,16 +360,6 @@ func main() {
                 {/* Content Area */}
                 <div className="flex-1 p-4 md:p-6 overflow-auto custom-scrollbar bg-[#0D1117] relative">
                     
-                    {/* Floating Copy Button for Mobile */}
-                    {viewMode !== 'schema' && (
-                        <button 
-                            onClick={() => copyToClipboard(viewMode === 'request' ? getCodeSnippet() || "" : responseJson, false)}
-                            className="md:hidden absolute top-4 right-4 p-2 bg-slate-800 rounded-lg text-slate-400 hover:text-white shadow-lg border border-slate-700 z-10"
-                        >
-                            {copiedSnippet ? <Check size={16} className="text-green-500"/> : <Copy size={16}/>}
-                        </button>
-                    )}
-
                     {viewMode === 'request' && (
                         <pre className="font-mono text-[10px] md:text-sm leading-relaxed text-blue-300 animate-in fade-in whitespace-pre-wrap md:whitespace-pre">
                             {getCodeSnippet()}
@@ -403,38 +368,45 @@ func main() {
 
                     {viewMode === 'response' && (
                         <pre className="font-mono text-[10px] md:text-sm leading-relaxed text-emerald-400 animate-in fade-in whitespace-pre-wrap md:whitespace-pre">
-                            {responseJson}
+                            {getCurrentResponse()}
                         </pre>
                     )}
 
-                    {/* 📖 SCHEMA GUIDE TABLE - Responsive scroll */}
                     {viewMode === 'schema' && (
                         <div className="animate-in fade-in space-y-6 overflow-x-auto">
-                            <SchemaTable title="Sender Details" fields={[
-                                { name: "sender_name", type: "String", req: "Yes", desc: "Name of the business/sender." },
-                                { name: "sender_phone", type: "String", req: "Yes", desc: "10-digit mobile number." },
-                                { name: "sender_address", type: "String", req: "Yes", desc: "Building, Street, Area." },
-                                { name: "sender_city", type: "String", req: "Yes", desc: "City name (e.g. Mumbai)." },
-                                { name: "sender_pincode", type: "String", req: "Yes", desc: "6-digit postal code." },
-                            ]}/>
-                            
-                            <SchemaTable title="Receiver Details" fields={[
-                                { name: "receiver_name", type: "String", req: "Yes", desc: "Customer's full name." },
-                                { name: "receiver_phone", type: "String", req: "Yes", desc: "Customer's mobile number." },
-                                { name: "receiver_address", type: "String", req: "Yes", desc: "Full delivery address." },
-                                { name: "receiver_pincode", type: "String", req: "Yes", desc: "Destination pincode." },
-                            ]}/>
-
-                            <SchemaTable title="Shipment Info" fields={[
-                                { name: "weight", type: "Number", req: "Yes", desc: "Weight in KG (e.g. 0.5)." },
-                                { name: "package_type", type: "String", req: "No", desc: "Default: 'Standard Box'." },
-                                { name: "payment_mode", type: "String", req: "Yes", desc: "'Prepaid' or 'COD'." },
-                                { name: "cod_amount", type: "Number", req: "Cond", desc: "Required if mode is COD." },
-                                { name: "declared_value", type: "Number", req: "Yes", desc: "Product value for insurance." },
-                            ]}/>
+                            {apiOperation === 'create' ? (
+                                <>
+                                    <SchemaTable title="Sender Details" fields={[
+                                        { name: "sender_name", type: "String", req: "Yes", desc: "Name of the business/sender." },
+                                        { name: "sender_phone", type: "String", req: "Yes", desc: "10-digit mobile number." },
+                                        { name: "sender_address", type: "String", req: "Yes", desc: "Building, Street, Area." },
+                                        { name: "sender_city", type: "String", req: "Yes", desc: "City name (e.g. Mumbai)." },
+                                        { name: "sender_pincode", type: "String", req: "Yes", desc: "6-digit postal code." },
+                                    ]}/>
+                                    <SchemaTable title="Receiver Details" fields={[
+                                        { name: "receiver_name", type: "String", req: "Yes", desc: "Customer's full name." },
+                                        { name: "receiver_phone", type: "String", req: "Yes", desc: "Customer's mobile number." },
+                                        { name: "receiver_address", type: "String", req: "Yes", desc: "Full delivery address." },
+                                        { name: "receiver_pincode", type: "String", req: "Yes", desc: "Destination pincode." },
+                                    ]}/>
+                                    <SchemaTable title="Shipment Info" fields={[
+                                        { name: "weight", type: "Number", req: "Yes", desc: "Weight in KG (e.g. 0.5)." },
+                                        { name: "payment_mode", type: "String", req: "Yes", desc: "'Prepaid' or 'COD'." },
+                                        { name: "cod_amount", type: "Number", req: "Cond", desc: "Required if mode is COD." },
+                                    ]}/>
+                                </>
+                            ) : (
+                                <SchemaTable title="Tracking Response (Bulk)" fields={[
+                                    { name: "success", type: "Boolean", req: "Yes", desc: "Request status." },
+                                    { name: "total_found", type: "Number", req: "Yes", desc: "Count of matching AWBs." },
+                                    { name: "data[].status.current", type: "String", req: "Yes", desc: "Status (e.g. In Transit)." },
+                                    { name: "data[].status.current_location", type: "String", req: "Yes", desc: "Latest scanned location." },
+                                    { name: "data[].status.last_updated", type: "Date", req: "Yes", desc: "ISO Date of last event." },
+                                    { name: "data[].history", type: "Array", req: "Yes", desc: "Full tracking timeline events." },
+                                ]}/>
+                            )}
                         </div>
                     )}
-
                 </div>
             </div>
         </div>
@@ -538,7 +510,7 @@ const bulkOrderObj = [
   { ...singleOrderObj, receiver_name: "Priya Singh", weight: 1.2 }
 ];
 
-const responseJson = `{
+const responseJsonCreate = `{
   "success": true,
   "message": "1 Shipment(s) booked successfully",
   "data": [
@@ -546,7 +518,60 @@ const responseJson = `{
       "awb_code": "UEX28374928",
       "receiver_name": "Rahul Sharma",
       "status": "created",
-      "label_url": "https://universal.express/print/UEX28374928"
+      "label_url": "https://www.universalexpress.live/print/UEXxxxxxx97"
+    }
+  ]
+}`;
+
+const responseJsonTrackSingle = `{
+  "success": true,
+  "data": {
+    "awb": "UEX12345678",
+    "reference_id": "REF-001",
+    "status": {
+      "current": "in_transit",
+      "booked_on": "2024-03-10T10:00:00Z"
+    },
+    "history": [
+      {
+        "status": "in_transit",
+        "location": "Hub Mumbai",
+        "timestamp": "2024-03-11T14:30:00Z"
+      }
+    ]
+  }
+}`;
+
+const responseJsonTrackBulk = `{
+  "success": true,
+  "total_requested": 2,
+  "total_found": 2,
+  "data": [
+    {
+      "awb": "UEX12345678",
+      "reference_id": "REF-001",
+      "status": { 
+        "current": "in_transit",
+        "current_location": "Hub Mumbai",
+        "last_updated": "2024-03-12T14:00:00Z" 
+      },
+      "history": [
+        {
+          "status": "in_transit",
+          "location": "Hub Mumbai",
+          "timestamp": "2024-03-12T14:00:00Z"
+        }
+      ]
+    },
+    {
+      "awb": "UEX87654321",
+      "reference_id": "REF-002",
+      "status": { 
+        "current": "delivered",
+        "current_location": "Delhi",
+        "last_updated": "2024-03-13T09:15:00Z" 
+      },
+      "history": [ ... ]
     }
   ]
 }`;

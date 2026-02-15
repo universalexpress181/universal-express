@@ -8,7 +8,8 @@ import { usePathname, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { 
   Box, LogOut, Loader2, Users, 
-  UserCheck, Menu, X, Building2, Package, Moon, Sun, ShieldAlert 
+  UserCheck, Menu, X, Building2, Package, Moon, Sun, ShieldAlert,
+  Settings2 // 🆕 Imported Settings2 for the Generator
 } from "lucide-react";
 import LogoutOnBack from "@/components/LogoutOnBack"; 
 import { motion, AnimatePresence } from "framer-motion";
@@ -161,6 +162,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           <p className="px-2 text-[10px] font-black text-slate-400 dark:text-red-300/70 uppercase tracking-widest mb-2 opacity-100">Management</p>
           
           <NavLink href="/admin/shipments" icon={<Box size={20} />} label="All Shipments" currentPath={pathname} />
+          {/* 🆕 ADDED SHIPMENT GENERATOR LINK */}
+          <NavLink href="/admin/generator" icon={<Settings2 size={20} />} label="Shipment Generator" currentPath={pathname} />
           <NavLink href="/admin/sellers" icon={<Building2 size={20} />} label="B2B Partners" currentPath={pathname} />
           <NavLink href="/admin/users" icon={<Users size={20} />} label="Customers" currentPath={pathname} />
           
@@ -247,7 +250,6 @@ function NavLink({ href, icon, label, currentPath }: { href: string, icon: any, 
             <div className={`relative flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all duration-300
                 ${isActive 
                     ? 'text-white' 
-                    // ✨ FIXED: Much brighter inactive text for Dark Mode (slate-300)
                     : 'text-slate-500 dark:text-slate-300 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20'}
             `}>
                 <div className="relative z-10 transition-transform duration-300 group-hover:scale-110 group-hover:-rotate-3">

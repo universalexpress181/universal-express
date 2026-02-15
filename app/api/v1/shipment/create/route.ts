@@ -1,6 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
-import { generateProfessionalAWB } from '@/lib/awbGenerator'; // Keeping import as requested
 
 // Initialize Supabase Admin Client
 const supabaseAdmin = createClient(
@@ -33,7 +32,6 @@ export async function POST(request: Request) {
     // ---------------------------------------------------------
     requestBody = await request.json();
     
-    // Normalize input: Support both Single Object and Array (Bulk)
     const shipmentsToProcess = Array.isArray(requestBody) ? requestBody : [requestBody];
 
     if (shipmentsToProcess.length === 0) {
@@ -44,7 +42,7 @@ export async function POST(request: Request) {
     const generatedResponseData = [];
 
     // ---------------------------------------------------------
-    // 3. LOOP & PROCESS (No Wallet/Cost Logic)
+    // 3. LOOP & PROCESS
     // ---------------------------------------------------------
     
     let loopCounter = 0;
@@ -57,32 +55,23 @@ export async function POST(request: Request) {
             throw new Error(`Missing required fields for receiver: ${item.receiver_name || 'Unknown'}`);
         }
 
-        // --- A. GENERATE UNIQUE AWB (Strict 11-Digit Format) ---
-        // Format: UNI (3 chars) + Random (5 digits) + Counter (3 digits) = 11 Characters Total
-        // We generate a NEW random number for every item to avoid duplicates.
+        // --- A. GENERATE UNIQUE AWB ---
         const prefix = "UEX";
-        const randomPart = Math.floor(10000 + Math.random() * 90000).toString(); // Always 5 digits
-        const counterPart = String(loopCounter).padStart(3, '0'); // Always 3 digits (e.g. 001, 002)
-
+        const randomPart = Math.floor(10000 + Math.random() * 90000).toString();
+        const counterPart = String(loopCounter).padStart(3, '0'); 
         const awb = `${prefix}${randomPart}${counterPart}`;
 
-        // --- B. HANDLE PAYMENT MODE (Prepaid or COD) ---
-        // Normalize input to uppercase to handle 'cod', 'COD', 'prepaid', 'Prepaid'
+        // --- B. HANDLE PAYMENT MODE ---
         const inputMode = (item.payment_mode || 'Prepaid').toUpperCase();
-        
-        // Strict check: If it's COD, set to COD. Everything else defaults to Prepaid.
         const mode = inputMode === 'COD' ? 'COD' : 'Prepaid';
-
-        // Capture COD Amount only if mode is COD
         const codAmount = mode === 'COD' ? (parseFloat(item.cod_amount) || 0) : 0;
         const declaredValue = parseFloat(item.declared_value) || 0;
 
         // --- C. PREPARE DATABASE ROW ---
-        // Note: We are manually selecting fields here. 
-        // Any extra fields like 'order_id' or 'serial_no' in 'item' are automatically IGNORED.
         insertData.push({
             user_id: userId,
             awb_code: awb,
+            // ❌ REMOVED: reference_id is no longer read from input
             
             // Sender
             sender_name: item.sender_name,
@@ -104,15 +93,10 @@ export async function POST(request: Request) {
             weight: parseFloat(item.weight) || 0.5,
             package_type: item.package_type,
             
-            // Payment & Financials (Wallet/Cost logic removed as requested)
+            // Payment (No internal costs)
             payment_mode: mode,
             cod_amount: codAmount,
             declared_value: declaredValue,
-            
-            base_fee: 0,
-            cod_fee: 0,
-            tax_amount: 0,
-            cost: 0, 
             
             // Status
             current_status: 'created',
@@ -122,8 +106,9 @@ export async function POST(request: Request) {
         // Add to response array
         generatedResponseData.push({
             awb_code: awb,
+            // ❌ REMOVED: reference_id from response
             receiver_name: item.receiver_name,
-            payment_mode: mode, // Return the confirmed mode
+            payment_mode: mode,
             cod_amount: codAmount,
             status: "created",
             label_url: `${process.env.NEXT_PUBLIC_SITE_URL}/print/${awb}`
@@ -153,9 +138,6 @@ export async function POST(request: Request) {
         response_body: { success: true, count: generatedResponseData.length } 
     });
 
-    // ---------------------------------------------------------
-    // 6. RESPONSE
-    // ---------------------------------------------------------
     return NextResponse.json({
         success: true,
         message: `${generatedResponseData.length} Shipment(s) booked successfully`,

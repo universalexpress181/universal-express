@@ -42,12 +42,12 @@ export async function GET(request: Request) {
     }
 
     // ---------------------------------------------------------
-    // 3. FETCH FULL SHIPMENT DETAILS
+    // 3. FETCH FULL SHIPMENT DETAILS (Added reference_id)
     // ---------------------------------------------------------
     const { data: shipment, error: shipError } = await supabaseAdmin
       .from('shipments')
       .select(`
-        id, awb_code, current_status, created_at,
+        id, awb_code, reference_id, current_status, created_at,
         sender_name, sender_city, sender_state,
         receiver_name, receiver_city, receiver_state,
         weight, package_type,
@@ -95,8 +95,9 @@ export async function GET(request: Request) {
       success: true,
       data: {
         awb: shipment.awb_code,
+        reference_id: shipment.reference_id, // ✅ Now included in the response
         status: {
-            current: shipment.current_status,
+            current: shipment.current_status === 'created' ? 'Pending' : shipment.current_status,
             booked_on: shipment.created_at,
         },
         route: {
@@ -115,8 +116,6 @@ export async function GET(request: Request) {
             payment_mode: shipment.payment_mode,
             cod_to_collect: shipment.payment_mode === 'COD' ? shipment.cod_amount : 0,
             insured_value: shipment.declared_value,
-            shipping_cost: shipment.cost,
-            payment_status: shipment.payment_status
         },
         documents: {
             label_url: `${process.env.NEXT_PUBLIC_SITE_URL}/print/${shipment.awb_code}`

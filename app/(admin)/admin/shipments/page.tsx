@@ -2,14 +2,16 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import * as XLSX from "xlsx"; // 📦 npm install xlsx
 import { 
   Package, Truck, CheckCircle, Clock, Search, 
-  RefreshCw, XCircle, Trash2, ArrowRight, FileUp, Settings 
+  RefreshCw, XCircle, Trash2, ArrowRight, FileUp, Settings, 
+  ArrowLeftRight, Table, Database 
 } from "lucide-react"; 
 import Link from "next/link";
 
-// 🆕 LIST OF UPDATABLE COLUMNS
-const UPDATABLE_COLUMNS = [
+// 🆕 Fields allowed to be updated in your Database
+const DB_COLUMNS = [
     { value: "current_status", label: "Shipment Status" },
     { value: "payment_status", label: "Payment Status" },
     { value: "weight", label: "Package Weight" },
@@ -24,9 +26,15 @@ export default function AllShipmentsPage() {
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
 
-  // 🔹 Bulk Sync States
+  // 🔹 Bulk Sync & Mapping States
   const [bulkFile, setBulkFile] = useState<File | null>(null);
-  const [targetColumn, setTargetColumn] = useState("current_status");
+  const [sheetHeaders, setSheetHeaders] = useState<string[]>([]);
+  
+  // ⚙️ Mapping Configuration
+  const [targetDbColumn, setTargetDbColumn] = useState("current_status"); // What to update in DB
+  const [excelRefCol, setExcelRefCol] = useState(""); // Which Excel col has Reference ID
+  const [excelValCol, setExcelValCol] = useState(""); // Which Excel col has the New Value
+  
   const [bulkLoading, setBulkLoading] = useState(false);
 
   // 1. Fetch Logic
@@ -40,15 +48,52 @@ export default function AllShipmentsPage() {
     setLoading(false);
   };
 
-  // 2. Bulk Sync Logic
+  // 2. Handle File Upload & Parse Headers
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setBulkFile(file);
+
+    // Read headers immediately to populate dropdowns
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+        const bstr = evt.target?.result;
+        const wb = XLSX.read(bstr, { type: 'binary' });
+        const wsname = wb.SheetNames[0];
+        const ws = wb.Sheets[wsname];
+        
+        // Extract first row as headers
+        const data: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1 });
+        if (data && data.length > 0) {
+            const headers = data[0].map(String); // Ensure strings
+            setSheetHeaders(headers);
+            
+            // 🧠 Smart Auto-Select: Try to guess columns
+            const likelyRef = headers.find(h => /ref|id|order|awb/i.test(h));
+            const likelyVal = headers.find(h => /status|state|val/i.test(h));
+            
+            if (likelyRef) setExcelRefCol(likelyRef);
+            else if(headers.length > 0) setExcelRefCol(headers[0]);
+
+            if (likelyVal) setExcelValCol(likelyVal);
+            else if(headers.length > 1) setExcelValCol(headers[1]);
+        }
+    };
+    reader.readAsBinaryString(file);
+  };
+
+  // 3. Submit Bulk Sync
   const handleBulkSync = async () => {
-    if (!bulkFile) return alert("Select a file first");
+    if (!bulkFile || !excelRefCol || !excelValCol) return alert("Please map the Excel columns first.");
     setBulkLoading(true);
 
     try {
         const formData = new FormData();
         formData.append("file", bulkFile);
-        formData.append("targetColumn", targetColumn);
+        formData.append("targetDbColumn", targetDbColumn);
+        formData.append("excelRefCol", excelRefCol);
+        formData.append("excelValCol", excelValCol);
 
         const res = await fetch("/api/admin/shipments/bulk-sync", {
             method: "POST",
@@ -58,8 +103,11 @@ export default function AllShipmentsPage() {
 
         if (data.error) throw new Error(data.error);
 
-        alert(`✅ Sync Complete: ${data.results.success} Rows Updated`);
-        setBulkFile(null);
+        alert(`✅ Sync Complete!\nUpdated: ${data.results.success}\nFailed: ${data.results.failed}`);
+        
+        // Reset
+        setBulkFile(null); 
+        setSheetHeaders([]);
         fetchAll(); 
     } catch (err: any) {
         alert("Sync Error: " + err.message);
@@ -68,15 +116,11 @@ export default function AllShipmentsPage() {
     }
   };
 
-  // 3. Delete Logic
+  // 4. Delete Logic
   const handleDelete = async (id: string, awb: string) => {
       if (!confirm(`⚠️ PERMANENT ACTION\n\nDelete shipment #${awb}?`)) return;
       const { error } = await supabase.from('shipments').delete().eq('id', id);
-      if (error) {
-          alert("Failed to delete: " + error.message);
-      } else {
-          setShipments(prev => prev.filter(s => s.id !== id));
-      }
+      if (!error) setShipments(prev => prev.filter(s => s.id !== id));
   };
 
   useEffect(() => {
@@ -116,7 +160,7 @@ export default function AllShipmentsPage() {
     <div className="min-h-screen bg-gray-50 dark:bg-[#050b14] p-6 transition-colors duration-300">
       <div className="space-y-6 max-w-7xl mx-auto">
         
-        {/* 🟢 HEADER SECTION */}
+        {/* Header */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
              <h1 className="text-3xl font-black text-gray-900 dark:text-white flex items-center gap-3 tracking-tight">
@@ -126,7 +170,7 @@ export default function AllShipmentsPage() {
                   <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
                </span>
              </h1>
-             <p className="text-gray-500 dark:text-slate-400 text-sm font-medium mt-1">Live monitoring & flexible bulk sync.</p>
+             <p className="text-gray-500 dark:text-slate-400 text-sm font-medium mt-1">Live monitoring & bulk update tools.</p>
           </div>
           
           <div className="relative group w-full md:w-auto">
@@ -141,59 +185,95 @@ export default function AllShipmentsPage() {
           </div>
         </div>
 
-        {/* 🚀 DYNAMIC BULK SYNC PANEL (Fixed Layout) */}
+        {/* 🚀 SMART DYNAMIC BULK SYNC PANEL */}
         <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border border-gray-200 dark:border-slate-800 rounded-[2rem] p-8 shadow-2xl relative overflow-hidden group">
             <div className="absolute -top-24 -right-24 w-64 h-64 bg-blue-500/10 dark:bg-blue-500/5 rounded-full blur-[80px] pointer-events-none" />
 
-            <div className="flex flex-col lg:flex-row items-center gap-8 relative z-10">
-                <div className="flex items-center gap-5 shrink-0">
+            <div className="flex flex-col xl:flex-row items-start xl:items-end gap-8 relative z-10">
+                {/* Intro Section */}
+                <div className="flex items-center gap-5 shrink-0 xl:mb-2">
                     <div className="p-4 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl text-white shadow-lg">
                         <Settings size={28} />
                     </div>
                     <div>
                         <h3 className="font-black text-xl text-gray-900 dark:text-white tracking-tight">Dynamic Bulk Sync</h3>
-                        <p className="text-sm text-gray-500 dark:text-slate-400 font-medium mt-0.5">Update columns by Reference ID.</p>
+                        <p className="text-sm text-gray-500 dark:text-slate-400 font-medium mt-0.5">Update database using Excel mapping.</p>
                     </div>
                 </div>
 
-                <div className="flex-1 w-full grid grid-cols-1 md:grid-cols-3 gap-6 items-end">
-                    <div className="space-y-2.5">
-                        <label className="text-[11px] font-black text-gray-400 dark:text-slate-500 uppercase ml-1 tracking-widest">Update Field</label>
-                        <select 
-                            value={targetColumn}
-                            onChange={(e) => setTargetColumn(e.target.value)}
-                            className="w-full bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl p-3.5 text-sm outline-none text-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500/20 transition-all cursor-pointer"
-                        >
-                            {UPDATABLE_COLUMNS.map(col => <option key={col.value} value={col.value}>{col.label}</option>)}
-                        </select>
-                    </div>
-
-                    <div className="space-y-2.5">
-                        <label className="text-[11px] font-black text-gray-400 dark:text-slate-500 uppercase ml-1 tracking-widest">Excel/CSV File</label>
-                        <label className="relative group cursor-pointer block">
-                            <input 
-                                type="file" accept=".xlsx, .xls, .csv" 
-                                className="hidden" onChange={(e) => setBulkFile(e.target.files?.[0] || null)}
-                            />
-                            <div className="flex items-center gap-3 px-4 py-3.5 bg-gray-50 dark:bg-slate-800 border border-dashed border-gray-300 dark:border-slate-700 rounded-xl text-sm text-gray-600 dark:text-slate-400 group-hover:border-blue-500 transition-all">
-                                <FileUp size={20} className={bulkFile ? "text-blue-500" : ""} />
-                                <span className="truncate font-medium">{bulkFile ? bulkFile.name : "Select File"}</span>
+                {/* Controls */}
+                <div className="flex-1 w-full grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+                    
+                    {/* 1. File Upload */}
+                    <div className="space-y-2">
+                        <label className="text-[10px] font-black text-gray-400 dark:text-slate-500 uppercase ml-1 tracking-widest">1. Upload Excel</label>
+                        <label className={`relative group cursor-pointer block ${bulkFile ? 'opacity-100' : 'opacity-100'}`}>
+                            <input type="file" accept=".xlsx, .xls, .csv" className="hidden" onChange={handleFileChange} />
+                            <div className={`flex items-center gap-3 px-4 py-3 bg-gray-50 dark:bg-slate-800/50 border border-dashed rounded-xl text-sm transition-all ${bulkFile ? 'border-emerald-500 bg-emerald-50/10 text-emerald-600' : 'border-gray-300 dark:border-slate-700 text-gray-500'}`}>
+                                <FileUp size={18} />
+                                <span className="truncate max-w-[140px] font-bold">{bulkFile ? bulkFile.name : "Select File"}</span>
                             </div>
                         </label>
                     </div>
 
-                    <button 
-                        onClick={handleBulkSync}
-                        disabled={bulkLoading || !bulkFile}
-                        className="h-[52px] w-full bg-blue-600 hover:bg-blue-500 disabled:bg-gray-100 dark:disabled:bg-slate-800/50 disabled:text-gray-400 text-white rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-3 shadow-lg shadow-blue-500/20"
-                    >
-                        {bulkLoading ? <RefreshCw className="animate-spin" size={20}/> : <><RefreshCw size={20} /> Apply Sync</>}
-                    </button>
+                    {/* 2. Match Ref (EXCEL COLUMN) */}
+                    <div className={`space-y-2 transition-opacity duration-500 ${sheetHeaders.length > 0 ? 'opacity-100' : 'opacity-30 pointer-events-none'}`}>
+                        <label className="text-[10px] font-black text-gray-400 dark:text-slate-500 uppercase ml-1 tracking-widest flex items-center gap-1">
+                            <Search size={10}/> Excel: Match Ref By
+                        </label>
+                        <select 
+                            value={excelRefCol}
+                            onChange={(e) => setExcelRefCol(e.target.value)}
+                            className="w-full bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl p-3 text-sm font-medium outline-none focus:ring-2 focus:ring-blue-500/20"
+                        >
+                            {sheetHeaders.map(h => <option key={h} value={h}>{h}</option>)}
+                        </select>
+                    </div>
+
+                    {/* 3. New Value (EXCEL COLUMN) */}
+                    <div className={`space-y-2 transition-opacity duration-500 ${sheetHeaders.length > 0 ? 'opacity-100' : 'opacity-30 pointer-events-none'}`}>
+                        <label className="text-[10px] font-black text-gray-400 dark:text-slate-500 uppercase ml-1 tracking-widest flex items-center gap-1">
+                            <Table size={10}/> Excel: Status/Value
+                        </label>
+                        <select 
+                            value={excelValCol}
+                            onChange={(e) => setExcelValCol(e.target.value)}
+                            className="w-full bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl p-3 text-sm font-medium outline-none focus:ring-2 focus:ring-blue-500/20"
+                        >
+                            {sheetHeaders.map(h => <option key={h} value={h}>{h}</option>)}
+                        </select>
+                    </div>
+
+                    {/* 4. Target (DATABASE COLUMN) */}
+                    <div className="flex gap-2">
+                        <div className="space-y-2 flex-1">
+                            <label className="text-[10px] font-black text-gray-400 dark:text-slate-500 uppercase ml-1 tracking-widest flex items-center gap-1">
+                                <Database size={10}/> Database Field
+                            </label>
+                            <select 
+                                value={targetDbColumn}
+                                onChange={(e) => setTargetDbColumn(e.target.value)}
+                                className="w-full bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl p-3 text-sm font-medium outline-none focus:ring-2 focus:ring-blue-500/20"
+                            >
+                                {DB_COLUMNS.map(col => <option key={col.value} value={col.value}>{col.label}</option>)}
+                            </select>
+                        </div>
+                        
+                        <button 
+                            onClick={handleBulkSync}
+                            disabled={bulkLoading || !bulkFile || !excelRefCol || !excelValCol}
+                            className="h-[46px] w-[46px] mt-auto bg-blue-600 hover:bg-blue-500 disabled:bg-gray-100 dark:disabled:bg-slate-800/50 disabled:text-gray-400 text-white rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/20 transition-all shrink-0"
+                            title="Run Sync"
+                        >
+                            {bulkLoading ? <RefreshCw className="animate-spin" size={20}/> : <ArrowRight size={20} />}
+                        </button>
+                    </div>
+
                 </div>
             </div>
         </div>
 
-        {/* 🔵 FILTER TABS */}
+        {/* 🔵 FILTER TABS & TABLE (Existing Code) */}
         <div className="flex flex-wrap gap-2 border-b border-gray-200 dark:border-slate-800 pb-1">
           {tabs.map((tab) => {
              const Icon = tab.icon;
@@ -228,7 +308,6 @@ export default function AllShipmentsPage() {
           })}
         </div>
 
-        {/* 📄 TABLE CONTAINER */}
         <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-3xl overflow-hidden shadow-xl min-h-[400px]">
           <div className="overflow-x-auto">
               <table className="w-full text-left text-gray-600 dark:text-slate-300">
