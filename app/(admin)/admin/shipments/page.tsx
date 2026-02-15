@@ -95,7 +95,7 @@ export default function AllShipmentsPage() {
         formData.append("excelRefCol", excelRefCol);
         formData.append("excelValCol", excelValCol);
 
-        const res = await fetch("/api/admin/shipments/bulk-sync", {
+        const res = await fetch("/api/admin/shipments/bulk-status", {
             method: "POST",
             body: formData
         });

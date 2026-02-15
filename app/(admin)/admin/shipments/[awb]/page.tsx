@@ -24,7 +24,7 @@ const STATUS_OPTIONS = [
   { group: "Exceptions & Failures", options: [
     { value: "pickup_failed", label: "⚠️ Pickup Failed" },
     { value: "delivery_failed", label: "⚠️ Delivery Failed" },
-    { value: "rto", label: "↩️ Return to Sender (RTO)" },
+    { value: "rto_initiated", label: "↩️ Return to Sender (RTO)" },
   ]}
 ];
 
@@ -72,7 +72,7 @@ export default function AdminShipmentDetail() {
 
   // 🎨 COLOR LOGIC
   const getStatusColor = (st: string) => {
-    if (['pickup_failed', 'delivery_failed', 'rto'].includes(st)) 
+    if (['pickup_failed', 'delivery_failed', 'rto_initiated'].includes(st)) 
         return 'bg-red-50 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-900/50';
     if (st === 'delivered') 
         return 'bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-900/20 dark:text-teal-400 dark:border-teal-900/50';
@@ -113,7 +113,7 @@ export default function AdminShipmentDetail() {
 
   // ⚡ AUTO-FILL REASON FOR RTO
   useEffect(() => {
-    if (status === "rto") {
+    if (status === "rto_initiated") {
         setReason("Maximum delivery attempts exceeded");
     } else if (['pickup_failed', 'delivery_failed'].includes(status)) {
         if (reason === "Maximum delivery attempts exceeded") setReason(""); 
@@ -148,7 +148,7 @@ export default function AdminShipmentDetail() {
   const handleUpdate = async () => {
     if (!shipment?.id) return;
 
-    const isFailure = ['pickup_failed', 'delivery_failed', 'rto'].includes(status);
+    const isFailure = ['pickup_failed', 'delivery_failed', 'rto_initiated'].includes(status);
     const failureReasonToSave = isFailure ? reason : null;
 
     const { error: updateError } = await supabase
@@ -236,7 +236,7 @@ export default function AdminShipmentDetail() {
   
   if (!shipment) return <div className="p-10 text-gray-500">Shipment not found</div>;
 
-  const isFailureStatus = ['pickup_failed', 'delivery_failed', 'rto'].includes(status);
+  const isFailureStatus = ['pickup_failed', 'delivery_failed', 'rto_initiated'].includes(status);
   const isDelivered = shipment.current_status === 'delivered';
 
   return (
@@ -392,7 +392,7 @@ export default function AdminShipmentDetail() {
                                 className="overflow-hidden"
                             >
                                 <label className="text-[10px] text-red-500 font-bold uppercase mb-1.5 block">
-                                    {status === 'rto' ? 'RTO Reason' : 'Failure Reason'}
+                                    {status === 'rto_initiated' ? 'RTO Reason' : 'Failure Reason'}
                                 </label>
                                 <input 
                                     value={reason}
