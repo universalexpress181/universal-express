@@ -42,20 +42,20 @@ export async function GET(request: Request) {
     }
 
     // ---------------------------------------------------------
-    // 3. FETCH FULL SHIPMENT DETAILS (Added reference_id)
+    // 3. FETCH SHIPMENT DETAILS (reference_id REMOVED FROM SELECT)
     // ---------------------------------------------------------
     const { data: shipment, error: shipError } = await supabaseAdmin
       .from('shipments')
       .select(`
-        id, awb_code, reference_id, current_status, created_at,
+        id, awb_code, current_status, created_at,
         sender_name, sender_city, sender_state,
         receiver_name, receiver_city, receiver_state,
         weight, package_type,
-        payment_mode, cod_amount, declared_value, cost,
+        payment_mode, cod_amount, declared_value,
         payment_status
       `)
       .eq('awb_code', awb)
-      .eq('user_id', userId) // 🔒 SECURITY: Only show if it belongs to this Seller
+      .eq('user_id', userId) // 🔒 Security: Only the owner can track
       .single();
 
     if (shipError || !shipment) {
@@ -63,7 +63,7 @@ export async function GET(request: Request) {
     }
 
     // ---------------------------------------------------------
-    // 4. FETCH TRACKING HISTORY
+    // 4. FETCH TRACKING HISTORY (Timeline)
     // ---------------------------------------------------------
     const { data: history } = await supabaseAdmin
       .from('tracking_events')
@@ -72,30 +72,27 @@ export async function GET(request: Request) {
       .order('timestamp', { ascending: false });
 
     // ---------------------------------------------------------
-    // 5. LOGGING (For Analytics/Billing)
+    // 5. LOGGING & USAGE
     // ---------------------------------------------------------
-    
-    // Increment API Usage
     supabaseAdmin.rpc('increment_key_usage', { key_id: keyData.id });
 
-    // Log the request
     supabaseAdmin.from('api_logs').insert({
         user_id: userId,
         endpoint: '/api/v1/shipment/track',
         method: 'GET',
         status_code: 200,
         request_body: { awb },
-        response_body: { success: true, awb } // Keep log payload light
+        response_body: { success: true, awb }
     });
 
     // ---------------------------------------------------------
-    // 6. RETURN RICH RESPONSE
+    // 6. RETURN WHITE-LABELED RESPONSE
     // ---------------------------------------------------------
     return NextResponse.json({
       success: true,
       data: {
         awb: shipment.awb_code,
-        reference_id: shipment.reference_id, // ✅ Now included in the response
+        // ❌ reference_id is strictly hidden from this response
         status: {
             current: shipment.current_status === 'created' ? 'Pending' : shipment.current_status,
             booked_on: shipment.created_at,
@@ -120,22 +117,11 @@ export async function GET(request: Request) {
         documents: {
             label_url: `${process.env.NEXT_PUBLIC_SITE_URL}/print/${shipment.awb_code}`
         },
-        history: history || []
+        history: history || [] // Chronological timeline
       }
     });
 
   } catch (error: any) {
-    // Log Failure
-    if (userId) {
-        await supabaseAdmin.from('api_logs').insert({
-            user_id: userId,
-            endpoint: '/api/v1/shipment/track',
-            method: 'GET',
-            status_code: 500,
-            request_body: { awb },
-            response_body: { error: error.message }
-        });
-    }
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

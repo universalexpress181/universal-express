@@ -9,7 +9,6 @@ const supabaseAdmin = createClient(
 
 export async function POST(request: Request) {
   let userId = null;
-  let requestBody = null;
 
   try {
     // ---------------------------------------------------------
@@ -20,7 +19,7 @@ export async function POST(request: Request) {
 
     const { data: keyData, error: keyError } = await supabaseAdmin
       .from('api_keys')
-      .select('user_id, is_active')
+      .select('user_id, is_active, id')
       .eq('secret_key', apiKey)
       .single();
 
@@ -30,9 +29,14 @@ export async function POST(request: Request) {
     // ---------------------------------------------------------
     // 2. PARSE REQUEST
     // ---------------------------------------------------------
-    requestBody = await request.json();
+    const requestBody = await request.json();
     
-    const shipmentsToProcess = Array.isArray(requestBody) ? requestBody : [requestBody];
+    let shipmentsToProcess = [];
+    if (requestBody.data) {
+        shipmentsToProcess = Array.isArray(requestBody.data) ? requestBody.data : [requestBody.data];
+    } else {
+        shipmentsToProcess = Array.isArray(requestBody) ? requestBody : [requestBody];
+    }
 
     if (shipmentsToProcess.length === 0) {
         return NextResponse.json({ error: 'No shipment data provided' }, { status: 400 });
@@ -44,44 +48,61 @@ export async function POST(request: Request) {
     // ---------------------------------------------------------
     // 3. LOOP & PROCESS
     // ---------------------------------------------------------
-    
-    let loopCounter = 0;
-
     for (const item of shipmentsToProcess) {
-        loopCounter++; 
-
-        // Basic Validation
-        if (!item.sender_name || !item.receiver_name || !item.receiver_address || !item.package_type) {
+        // Validation
+        if (!item.sender_name || !item.receiver_name || !item.receiver_address) {
             throw new Error(`Missing required fields for receiver: ${item.receiver_name || 'Unknown'}`);
         }
 
-        // --- A. GENERATE UNIQUE AWB ---
-        const prefix = "UEX";
-        const randomPart = Math.floor(10000 + Math.random() * 90000).toString();
-        const counterPart = String(loopCounter).padStart(3, '0'); 
-        const awb = `${prefix}${randomPart}${counterPart}`;
+        // --- A. GENERATE UNIQUE INTERNAL AWB ---
+        const awb = `UEX${Math.floor(10000000 + Math.random() * 90000000)}`;
 
-        // --- B. HANDLE PAYMENT MODE ---
+        // --- B. HANDLE PAYMENT MODE & LOGIC ---
         const inputMode = (item.payment_mode || 'Prepaid').toUpperCase();
         const mode = inputMode === 'COD' ? 'COD' : 'Prepaid';
-        const codAmount = mode === 'COD' ? (parseFloat(item.cod_amount) || 0) : 0;
         const declaredValue = parseFloat(item.declared_value) || 0;
+        const codAmount = mode === 'COD' ? (parseFloat(item.cod_amount) || declaredValue) : 0;
+        const requestedService = mode === 'COD' ? 'COD' : (item.service_type || 'Prime');
 
-        // --- C. PREPARE DATABASE ROW ---
+        // --- C. ALLOCATE PARTNER AWB FROM BANK (BACKEND ONLY) ---
+        const { data: partnerAwb, error: rpcError } = await supabaseAdmin.rpc('allocate_next_awb', { 
+            requested_service: requestedService, 
+            target_uex_awb: awb 
+        });
+
+        if (rpcError || !partnerAwb) {
+            throw new Error(`Inventory stock empty for ${requestedService}. Please restock AWB Bank.`);
+        }
+
+        // Determine partner name based on service (for internal admin use)
+        const partnerName = requestedService === 'Ground Cargo' ? 'DPWORLD' : 'DTDC';
+
+        // --- D. PREPARE DATABASE ROW ---
         insertData.push({
             user_id: userId,
             awb_code: awb,
-            // ❌ REMOVED: reference_id is no longer read from input
             
-            // Sender
+            // 🎯 INTERNAL DATA (Strictly for Backend/Admin use)
+            reference_id: partnerAwb, 
+            partner_name: partnerName,
+            service_type: requestedService,
+            
+            // Client References
+            client_order_id: item.client_order_id || null,
+            shipment_type: item.shipment_type || 'forward',
+            
+            // Sender details
+            ship_from_company: item.ship_from_company,
             sender_name: item.sender_name,
             sender_phone: item.sender_phone,
             sender_address: item.sender_address,
             sender_city: item.sender_city,
             sender_state: item.sender_state,
             sender_pincode: item.sender_pincode,
+            sender_email: item.sender_email || null,
             
-            // Receiver
+            // Receiver details
+            ship_to_company: item.ship_to_company,
             receiver_name: item.receiver_name,
             receiver_phone: item.receiver_phone,
             receiver_address: item.receiver_address,
@@ -89,34 +110,36 @@ export async function POST(request: Request) {
             receiver_state: item.receiver_state,
             receiver_pincode: item.receiver_pincode,
             
-            // Package
+            // Package & Dimensions
+            package_type: item.package_type || 'Standard Box',
+            product_description: item.product_description || 'General Goods',
             weight: parseFloat(item.weight) || 0.5,
-            package_type: item.package_type,
+            length: parseFloat(item.length) || 10,
+            width: parseFloat(item.width) || 10,
+            height: parseFloat(item.height) || 10,
+            identical_package_count: parseInt(item.identical_package_count) || 1,
             
-            // Payment (No internal costs)
+            // Financials & Status
             payment_mode: mode,
             cod_amount: codAmount,
             declared_value: declaredValue,
-            
-            // Status
-            current_status: 'created',
-            payment_status: 'paid' 
+            current_status: 'Order_placed'
         });
 
-        // Add to response array
+        // --- E. ADD TO RESPONSE (White-Labeled) ---
+        // ❌ reference_id and partner_name are NOT included here
         generatedResponseData.push({
             awb_code: awb,
-            // ❌ REMOVED: reference_id from response
+            client_order_id: item.client_order_id || undefined,
             receiver_name: item.receiver_name,
             payment_mode: mode,
-            cod_amount: codAmount,
-            status: "created",
+            status: "order_placed",
             label_url: `${process.env.NEXT_PUBLIC_SITE_URL}/print/${awb}`
         });
     }
 
     // ---------------------------------------------------------
-    // 4. BULK INSERT
+    // 4. DATABASE INSERT
     // ---------------------------------------------------------
     const { error: insertError } = await supabaseAdmin
         .from('shipments')
@@ -125,18 +148,9 @@ export async function POST(request: Request) {
     if (insertError) throw insertError;
 
     // ---------------------------------------------------------
-    // 5. LOGGING
+    // 5. LOGGING & USAGE
     // ---------------------------------------------------------
     await supabaseAdmin.rpc('increment_key_usage', { key_id: keyData.id });
-
-    await supabaseAdmin.from('api_logs').insert({ 
-        user_id: userId, 
-        endpoint: '/api/v1/shipment/create', 
-        method: 'POST', 
-        status_code: 200, 
-        request_body: { count: shipmentsToProcess.length, sample: shipmentsToProcess[0] }, 
-        response_body: { success: true, count: generatedResponseData.length } 
-    });
 
     return NextResponse.json({
         success: true,
@@ -145,16 +159,6 @@ export async function POST(request: Request) {
     });
 
   } catch (error: any) {
-    if (userId) {
-        await supabaseAdmin.from('api_logs').insert({
-            user_id: userId,
-            endpoint: '/api/v1/shipment/create', 
-            method: 'POST', 
-            status_code: 500, 
-            request_body: requestBody, 
-            response_body: { error: error.message }
-        });
-    }
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

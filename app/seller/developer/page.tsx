@@ -3,9 +3,9 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { 
-  Key, Copy, RefreshCw, Check, Shield, Code, Server, 
+  Key, Copy, RefreshCw, Check, Code, Server, 
   Eye, EyeOff, Box, Layers, Terminal, FileJson, 
-  BookOpen, Globe, Zap, Hash, Coffee, Menu, Search, Truck
+  BookOpen, Search, Globe, Info
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -23,72 +23,49 @@ const itemVariants = {
 export default function DeveloperSettings() {
   const [loading, setLoading] = useState(true);
   const [apiKey, setApiKey] = useState("");
-  const [baseUrl, setBaseUrl] = useState("");
-  const [showKey, setShowKey] = useState(false);
+  // 🌐 PRODUCTION BASE URL
+  const baseUrl = "https://www.universalexpress.live";
   
+  const [showKey, setShowKey] = useState(false);
   const [copiedKey, setCopiedKey] = useState(false);
   const [copiedSnippet, setCopiedSnippet] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
   
   const [apiOperation, setApiOperation] = useState<'create' | 'track_single' | 'track_bulk'>('create');
   const [reqType, setReqType] = useState<'single' | 'bulk'>('single');
-  const [lang, setLang] = useState<'curl' | 'node' | 'python' | 'php' | 'csharp' | 'go'>('curl');
+  const [lang, setLang] = useState<'curl' | 'node' | 'python' | 'php'>('curl');
   const [viewMode, setViewMode] = useState<'request' | 'response' | 'schema'>('request');
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-        setBaseUrl(window.location.origin);
-    }
     fetchApiKey();
   }, []);
 
   const fetchApiKey = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-
-    const { data } = await supabase
-      .from('api_keys')
-      .select('secret_key')
-      .eq('user_id', user.id)
-      .single();
-
+    const { data } = await supabase.from('api_keys').select('secret_key').eq('user_id', user.id).single();
     if (data) setApiKey(data.secret_key);
     setLoading(false);
   };
 
   const generateNewKey = async () => {
-    if (!confirm("⚠️ WARNING: Generating a new key will stop all your existing integrations immediately. Are you sure?")) return;
+    if (!confirm("⚠️ WARNING: New key will invalidate existing integrations. Proceed?")) return;
     setRegenerating(true);
-    
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-
-    const newKey = "univ_live_" + Math.random().toString(36).substr(2, 9) + Math.random().toString(36).substr(2, 9);
-    
-    const { error } = await supabase
-        .from('api_keys')
-        .upsert({ user_id: user.id, secret_key: newKey }, { onConflict: 'user_id' });
-
-    if (!error) {
-        setApiKey(newKey);
-        alert("✅ New API Key Generated!");
-    }
+    const newKey = "univ_live_" + Math.random().toString(36).substr(2, 18);
+    const { error } = await supabase.from('api_keys').upsert({ user_id: user.id, secret_key: newKey }, { onConflict: 'user_id' });
+    if (!error) setApiKey(newKey);
     setRegenerating(false);
   };
 
   const copyToClipboard = (text: string, isKey: boolean) => {
     if (!text) return;
     navigator.clipboard.writeText(text);
-    if (isKey) {
-        setCopiedKey(true);
-        setTimeout(() => setCopiedKey(false), 2000);
-    } else {
-        setCopiedSnippet(true);
-        setTimeout(() => setCopiedSnippet(false), 2000);
-    }
+    if (isKey) { setCopiedKey(true); setTimeout(() => setCopiedKey(false), 2000); }
+    else { setCopiedSnippet(true); setTimeout(() => setCopiedSnippet(false), 2000); }
   };
 
-  // 🧑‍💻 CODE GENERATOR LOGIC
   const getCodeSnippet = () => {
     let url = "";
     let method = "POST";
@@ -97,312 +74,210 @@ export default function DeveloperSettings() {
 
     if (apiOperation === 'create') {
         url = `${baseUrl}/api/v1/shipment/create`;
-        method = "POST";
-        payloadData = reqType === 'single' ? singleOrderObj : bulkOrderObj;
-    } 
-    else if (apiOperation === 'track_single') {
+        payloadData = { data: reqType === 'single' ? singleOrderObj : bulkOrderObj };
+    } else if (apiOperation === 'track_single') {
         url = `${baseUrl}/api/v1/shipment/track?awb=UEX12345678`;
         method = "GET";
-        payloadData = null; 
-    } 
-    else if (apiOperation === 'track_bulk') {
+        payloadData = null;
+    } else {
         url = `${baseUrl}/api/v1/shipment/track/bulk`;
-        method = "POST";
-        payloadData = { awbs: ["UEX12345678", "UEX87654321", "UEX99887766"] };
+        payloadData = { awbs: ["UEX12345678", "UEX87654321"] };
     }
 
     const payloadStr = JSON.stringify(payloadData, null, 2);
 
     switch (lang) {
         case 'curl':
-            if (method === "GET") {
-                return `curl -X GET "${url}" \\
-  -H "x-api-key: ${safeKey}"`;
-            }
-            return `curl -X POST "${url}" \\
-  -H "Content-Type: application/json" \\
-  -H "x-api-key: ${safeKey}" \\
-  -d '${JSON.stringify(payloadData)}'`;
-
+            return method === "GET" 
+                ? `curl -X GET "${url}" \\\n  -H "x-api-key: ${safeKey}"`
+                : `curl -X POST "${url}" \\\n  -H "Content-Type: application/json" \\\n  -H "x-api-key: ${safeKey}" \\\n  -d '${JSON.stringify(payloadData)}'`;
         case 'node':
-            return `const axios = require('axios');
-
-const config = {
-  method: '${method.toLowerCase()}',
-  url: '${url}',
-  headers: { 
-    'Content-Type': 'application/json', 
-    'x-api-key': '${safeKey}'
-  }${payloadData ? `,\n  data: ${payloadStr}` : ''}
-};
-
-axios(config)
-.then((response) => console.log(JSON.stringify(response.data)))
-.catch((error) => console.log(error));`;
-
+            return `const axios = require('axios');\n\naxios({\n  method: '${method.toLowerCase()}',\n  url: '${url}',\n  headers: { 'x-api-key': '${safeKey}', 'Content-Type': 'application/json' },\n  ${payloadData ? `data: ${payloadStr}` : ''}\n}).then(res => console.log(res.data));`;
         case 'python':
-            return `import requests
-import json
-
-url = "${url}"
-headers = {
-  'Content-Type': 'application/json',
-  'x-api-key': '${safeKey}'
-}
-${payloadData ? `payload = ${payloadStr}\n` : ''}
-response = requests.request("${method}", url, headers=headers${payloadData ? ', json=payload' : ''})
-
-print(response.text)`;
-
+            return `import requests\nimport json\n\nurl = "${url}"\nheaders = {"x-api-key": "${safeKey}", "Content-Type": "application/json"}\n${payloadData ? `payload = ${payloadStr}\n` : ''}response = requests.request("${method}", url, headers=headers${payloadData ? ', json=payload' : ''})\nprint(response.json())`;
         case 'php':
-            return `<?php
-$curl = curl_init();
-${payloadData ? `$payload = json_encode(${payloadStr});` : ''}
-
-curl_setopt_array($curl, array(
-  CURLOPT_URL => '${url}',
-  CURLOPT_RETURNTRANSFER => true,
-  CURLOPT_CUSTOMREQUEST => '${method}',
-  ${payloadData ? `CURLOPT_POSTFIELDS => $payload,` : ''}
-  CURLOPT_HTTPHEADER => array(
-    'Content-Type: application/json',
-    'x-api-key: ${safeKey}'
-  ),
-));
-
-$response = curl_exec($curl);
-curl_close($curl);
-echo $response;`;
-
-        default: return "// Select a language";
+            return `<?php\n$ch = curl_init("${url}");\ncurl_setopt($ch, CURLOPT_CUSTOMREQUEST, "${method}");\ncurl_setopt($ch, CURLOPT_RETURNTRANSFER, true);\ncurl_setopt($ch, CURLOPT_HTTPHEADER, ['x-api-key: ${safeKey}', 'Content-Type: application/json']);\n${payloadData ? `curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode(${payloadStr}));` : ''}\n$res = curl_exec($ch);\necho $res;`;
+        default: return "";
     }
   };
 
+  // ✅ DEFINED ONLY ONCE: REACTIVE RESPONSE PREVIEW
   const getCurrentResponse = () => {
-      if (apiOperation === 'create') return responseJsonCreate;
-      if (apiOperation === 'track_single') return responseJsonTrackSingle;
-      if (apiOperation === 'track_bulk') return responseJsonTrackBulk; // ✅ Updated with new fields
-      return "{}";
-  }
+    if (apiOperation === 'create') {
+        return reqType === 'single' ? responseJsonCreateSingle : responseJsonCreateBulk;
+    }
+    if (apiOperation === 'track_single') return responseJsonTrackSingle;
+    return responseJsonTrackBulk;
+  };
 
   return (
-    <motion.div 
-      initial="hidden" animate="visible" variants={containerVariants}
-      className="max-w-7xl mx-auto space-y-8 md:space-y-10 pb-20 px-4 sm:px-6 lg:px-8 relative"
-    >
+    <motion.div initial="hidden" animate="visible" variants={containerVariants} className="max-w-7xl mx-auto space-y-8 pb-20 px-4 relative">
       <div className="hidden sm:block fixed top-20 right-20 w-96 h-96 bg-violet-500/10 dark:bg-violet-500/5 rounded-full blur-[100px] pointer-events-none -z-10" />
-      <div className="hidden sm:block fixed bottom-20 left-20 w-96 h-96 bg-cyan-500/10 dark:bg-cyan-500/5 rounded-full blur-[100px] pointer-events-none -z-10" />
 
       {/* 🟢 HEADER */}
       <motion.div variants={itemVariants} className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
             <h1 className="text-2xl md:text-3xl font-black text-slate-900 dark:text-white flex items-center gap-3 tracking-tight">
-                <div className="p-2 md:p-2.5 bg-gradient-to-br from-violet-500 to-fuchsia-600 rounded-xl text-white shadow-lg shadow-violet-500/20">
-                    <Code size={24}/>
-                </div>
+                <div className="p-2 md:p-2.5 bg-gradient-to-br from-violet-500 to-fuchsia-600 rounded-xl text-white shadow-lg"><Code size={24}/></div>
                 Developer Portal
             </h1>
-            <p className="text-slate-500 dark:text-slate-400 text-xs md:text-sm mt-2 font-medium ml-1 max-w-lg">
-                Complete documentation & tools for integrating our logistics API into your platform.
-            </p>
+            <p className="text-slate-500 dark:text-slate-400 text-xs md:text-sm mt-2 font-medium ml-1">Complete REST API documentation.</p>
+        </div>
+        <div className="flex items-center gap-2 px-4 py-2 bg-emerald-50 dark:bg-emerald-900/10 rounded-xl text-xs font-bold text-emerald-600 border border-emerald-200">
+            <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div> API System Live
         </div>
       </motion.div>
 
       {/* 🔑 API KEY SECTION */}
-      <motion.div variants={itemVariants} className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border border-slate-200 dark:border-slate-800 rounded-2xl md:rounded-3xl p-5 md:p-8 shadow-xl relative overflow-hidden">
-        <div className="absolute top-0 left-0 w-1.5 h-full bg-gradient-to-b from-yellow-400 to-orange-500"></div>
+      <motion.div variants={itemVariants} className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-xl relative overflow-hidden">
+        <div className="absolute top-0 left-0 w-1.5 h-full bg-orange-500"></div>
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
             <div>
-                <h3 className="text-base md:text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                    <Key size={20} className="text-orange-500"/> Authentication
-                </h3>
-                <p className="text-xs md:text-sm text-slate-500 dark:text-slate-400 mt-1">
-                    Pass this in the <code className="bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded text-orange-600 dark:text-orange-400 font-mono text-[10px] md:text-xs border border-slate-200 dark:border-slate-700">x-api-key</code> header.
-                </p>
+                <h3 className="text-base md:text-lg font-bold flex items-center gap-2 dark:text-white"><Key size={20} className="text-orange-500"/> Authentication</h3>
+                <p className="text-xs md:text-sm text-slate-500 mt-1">Pass this in the <code className="bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded text-orange-600 font-mono">x-api-key</code> header.</p>
             </div>
-            <button 
-                onClick={generateNewKey} 
-                disabled={regenerating} 
-                className="w-full md:w-auto text-xs font-bold text-red-500 bg-red-50 dark:bg-red-900/10 px-4 py-2.5 rounded-xl border border-red-200 dark:border-red-900/30 flex items-center justify-center md:justify-start gap-2 hover:bg-red-100 dark:hover:bg-red-900/30 transition-all"
-            >
-                <RefreshCw size={14} className={regenerating ? "animate-spin" : ""} /> Regenerate Key
+            <button onClick={generateNewKey} disabled={regenerating} className="w-full md:w-auto text-xs font-bold text-red-500 bg-red-50 dark:bg-red-900/10 px-4 py-2.5 rounded-xl border border-red-200 flex items-center justify-center gap-2 hover:bg-red-100 transition-all">
+                <RefreshCw size={14} className={regenerating ? "animate-spin" : ""}/> Regenerate Key
             </button>
         </div>
-        <div className="bg-slate-50 dark:bg-black/40 border border-slate-200 dark:border-slate-800 rounded-xl p-3 md:p-2 flex flex-col md:flex-row items-center justify-between gap-3">
-            <div className="w-full md:flex-1 px-2 md:px-4 py-2 font-mono text-slate-600 dark:text-slate-300 text-xs md:text-sm lg:text-base break-all flex items-center justify-between md:justify-start gap-3">
-                <span className={showKey ? "" : "blur-sm select-none transition-all duration-300"}>
-                    {apiKey || "Generating..."}
-                </span>
-                <button onClick={() => setShowKey(!showKey)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors p-1">
+        <div className="bg-slate-50 dark:bg-black/40 border border-slate-200 dark:border-slate-800 rounded-xl p-2 flex items-center gap-3">
+            <div className="flex-1 px-4 font-mono text-sm break-all flex items-center justify-between dark:text-slate-300">
+                <span className={showKey ? "" : "blur-sm select-none"}>{apiKey || "Loading..."}</span>
+                <button onClick={() => setShowKey(!showKey)} className="text-slate-400 hover:text-slate-200 ml-4">
                     {showKey ? <EyeOff size={16}/> : <Eye size={16}/>}
                 </button>
             </div>
-            <motion.button 
-                whileTap={{ scale: 0.9 }}
-                onClick={() => copyToClipboard(apiKey, true)} 
-                disabled={!apiKey}
-                className="w-full md:w-auto p-3 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-white rounded-lg md:rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm transition-all flex justify-center"
-            >
-                {copiedKey ? <Check size={20} className="text-green-500"/> : <Copy size={20}/>}
-            </motion.button>
+            <button onClick={() => copyToClipboard(apiKey, true)} className="p-3 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm active:scale-95 transition-all">
+                {copiedKey ? <Check size={20} className="text-green-500"/> : <Copy size={20} className="dark:text-white"/>}
+            </button>
         </div>
       </motion.div>
 
-      {/* 💻 CODE & DOCS SECTION */}
-      <motion.div variants={itemVariants} className="grid grid-cols-1 lg:grid-cols-12 gap-6 md:gap-8">
-        
-        {/* LEFT: CONTROLS & INFO */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        {/* LEFT CONTROLS */}
         <div className="lg:col-span-4 space-y-6">
-            <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur border border-slate-200 dark:border-slate-800 rounded-2xl p-5 md:p-6 shadow-sm">
-                <h3 className="font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
-                    <Terminal size={18} className="text-blue-500"/> Integration Config
-                </h3>
-                
-                {/* 1. API OPERATION SELECTION */}
-                <div className="mb-6">
-                    <label className="text-[10px] md:text-xs font-bold text-slate-400 uppercase mb-2 block">Endpoint</label>
-                    <div className="grid grid-cols-1 gap-2">
-                        <button onClick={() => setApiOperation('create')} className={`px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-start gap-3 border ${apiOperation === 'create' ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-500 text-blue-600 dark:text-blue-400' : 'bg-slate-50 dark:bg-slate-950 border-transparent text-slate-500 hover:bg-slate-100'}`}>
-                            <Box size={14}/> Create Shipment
-                        </button>
-                        <button onClick={() => setApiOperation('track_single')} className={`px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-start gap-3 border ${apiOperation === 'track_single' ? 'bg-orange-50 dark:bg-orange-900/20 border-orange-500 text-orange-600 dark:text-orange-400' : 'bg-slate-50 dark:bg-slate-950 border-transparent text-slate-500 hover:bg-slate-100'}`}>
-                            <Search size={14}/> Track Single
-                        </button>
-                        <button onClick={() => setApiOperation('track_bulk')} className={`px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-start gap-3 border ${apiOperation === 'track_bulk' ? 'bg-purple-50 dark:bg-purple-900/20 border-purple-500 text-purple-600 dark:text-purple-400' : 'bg-slate-50 dark:bg-slate-950 border-transparent text-slate-500 hover:bg-slate-100'}`}>
-                            <Layers size={14}/> Track Bulk
-                        </button>
+            <div className="bg-white/80 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm">
+                <h3 className="font-bold mb-4 flex items-center gap-2 dark:text-white"><Terminal size={18} className="text-blue-500"/> API Explorer</h3>
+                <div className="space-y-4">
+                    <div className="flex flex-col gap-2">
+                        <EndpointTab active={apiOperation==='create'} onClick={()=>setApiOperation('create')} icon={<Box size={14}/>} label="Create Shipment"/>
+                        <EndpointTab active={apiOperation==='track_single'} onClick={()=>setApiOperation('track_single')} icon={<Search size={14}/>} label="Track Single"/>
+                        <EndpointTab active={apiOperation==='track_bulk'} onClick={()=>setApiOperation('track_bulk')} icon={<Layers size={14}/>} label="Track Bulk"/>
                     </div>
-                </div>
 
-                {/* 2. Create Options */}
-                {apiOperation === 'create' && (
-                    <div className="mb-6 animate-in fade-in slide-in-from-top-2">
-                        <label className="text-[10px] md:text-xs font-bold text-slate-400 uppercase mb-2 block">Creation Mode</label>
-                        <div className="flex bg-slate-100 dark:bg-slate-950 p-1 rounded-xl">
-                            <button onClick={() => setReqType('single')} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${reqType === 'single' ? 'bg-white dark:bg-slate-800 shadow text-slate-900 dark:text-white' : 'text-slate-500'}`}>
-                                Single
-                            </button>
-                            <button onClick={() => setReqType('bulk')} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${reqType === 'bulk' ? 'bg-white dark:bg-slate-800 shadow text-slate-900 dark:text-white' : 'text-slate-500'}`}>
-                                Bulk Array
-                            </button>
+                    {apiOperation === 'create' && (
+                        <div className="pt-2 animate-in slide-in-from-top-2 duration-300">
+                            <label className="text-[10px] font-bold text-slate-400 uppercase block mb-2">Request Mode</label>
+                            <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-lg">
+                                <button onClick={()=>setReqType('single')} className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${reqType==='single' ? 'bg-white dark:bg-slate-700 shadow text-blue-500' : 'text-slate-500'}`}>Single</button>
+                                <button onClick={()=>setReqType('bulk')} className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${reqType==='bulk' ? 'bg-white dark:bg-slate-700 shadow text-blue-500' : 'text-slate-500'}`}>Bulk Array</button>
+                            </div>
                         </div>
-                    </div>
-                )}
+                    )}
 
-                {/* 3. Language */}
-                <div>
-                    <label className="text-[10px] md:text-xs font-bold text-slate-400 uppercase mb-2 block">Language</label>
-                    <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1 custom-scrollbar">
-                        <LanguageOption label="cURL" icon="🐚" active={lang === 'curl'} onClick={() => setLang('curl')} />
-                        <LanguageOption label="Node.js" icon="🟩" active={lang === 'node'} onClick={() => setLang('node')} />
-                        <LanguageOption label="Python" icon="🐍" active={lang === 'python'} onClick={() => setLang('python')} />
-                        <LanguageOption label="PHP" icon="🐘" active={lang === 'php'} onClick={() => setLang('php')} />
+                    <div>
+                        <label className="text-[10px] font-bold text-slate-400 uppercase block mb-2">Language</label>
+                        <select value={lang} onChange={(e:any)=>setLang(e.target.value)} className="w-full bg-slate-50 dark:bg-slate-800 border dark:border-slate-700 rounded-lg p-2 text-sm font-bold dark:text-white outline-none">
+                            <option value="curl">cURL (CLI)</option>
+                            <option value="node">Node.js (Axios)</option>
+                            <option value="python">Python (Requests)</option>
+                            <option value="php">PHP (cURL)</option>
+                        </select>
                     </div>
                 </div>
             </div>
 
-            {/* Endpoints Info List */}
-            <div className="bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 p-5 rounded-2xl">
-                <h4 className="font-bold text-slate-900 dark:text-white text-sm mb-3 flex items-center gap-2">
-                    <Server size={16} className="text-violet-500"/> Available Endpoints
-                </h4>
-                <div className="space-y-3">
-                    <div className="text-xs">
-                        <div className="flex flex-wrap items-center gap-2 mb-1">
+            {/* REST ENDPOINTS WITH SUBTEXT */}
+            <div className="bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 p-5 rounded-2xl shadow-sm">
+                <h4 className="font-bold text-sm mb-3 flex items-center gap-2 dark:text-white"><Server size={16} className="text-violet-500"/> Available Endpoints</h4>
+                <div className="space-y-4 font-mono text-[11px]">
+                    <div className="text-xs group">
+                        <div className="flex items-center gap-2 mb-1">
                             <span className="bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 px-1.5 py-0.5 rounded font-black text-[10px]">POST</span>
-                            <span className="font-mono text-slate-600 dark:text-slate-300 break-all">/api/v1/shipment/create</span>
+                            <span className="text-slate-600 dark:text-slate-300">/api/v1/shipment/create</span>
                         </div>
-                        <p className="text-slate-500 dark:text-slate-400 leading-tight">Create orders. Returns AWB & Label.</p>
+                        <p className="text-slate-500 dark:text-slate-400 font-sans mt-1 leading-relaxed">
+                            Generate new shipping labels and book pick-ups. Returns internal AWB and printable PDF link.
+                        </p>
                     </div>
                     <div className="h-px bg-slate-200 dark:bg-slate-800"></div>
-                    <div className="text-xs">
-                        <div className="flex flex-wrap items-center gap-2 mb-1">
+                    <div className="text-xs group">
+                        <div className="flex items-center gap-2 mb-1">
                             <span className="bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 px-1.5 py-0.5 rounded font-black text-[10px]">GET</span>
-                            <span className="font-mono text-slate-600 dark:text-slate-300 break-all">/api/v1/shipment/track?awb=...</span>
+                            <span className="text-slate-600 dark:text-slate-300">/api/v1/shipment/track</span>
                         </div>
-                        <p className="text-slate-500 dark:text-slate-400 leading-tight">Track a single shipment via Query Param.</p>
+                        <p className="text-slate-500 dark:text-slate-400 font-sans mt-1 leading-relaxed">
+                            Retrieve real-time status updates and complete chronological tracking history for a single AWB.
+                        </p>
                     </div>
-                    {/* 🆕 BULK TRACKING ENDPOINT */}
                     <div className="h-px bg-slate-200 dark:bg-slate-800"></div>
-                    <div className="text-xs">
-                        <div className="flex flex-wrap items-center gap-2 mb-1">
+                    <div className="text-xs group">
+                        <div className="flex items-center gap-2 mb-1">
                             <span className="bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 px-1.5 py-0.5 rounded font-black text-[10px]">POST</span>
-                            <span className="font-mono text-slate-600 dark:text-slate-300 break-all">/api/v1/shipment/track/bulk</span>
+                            <span className="text-slate-600 dark:text-slate-300">/api/v1/shipment/track/bulk</span>
                         </div>
-                        <p className="text-slate-500 dark:text-slate-400 leading-tight">Track up to 100 AWBs. Returns status & history.</p>
+                        <p className="text-slate-500 dark:text-slate-400 font-sans mt-1 leading-relaxed">
+                            Optimized batch tracking for up to 100 shipments. Ideal for dashboard overview syncs.
+                        </p>
                     </div>
                 </div>
             </div>
         </div>
 
-        {/* RIGHT: CODE & SCHEMA */}
-        <div className="lg:col-span-8">
-            <div className="bg-slate-900 rounded-2xl md:rounded-3xl border border-slate-800 shadow-2xl overflow-hidden flex flex-col h-full min-h-[500px] md:min-h-[600px]">
-                
-                {/* Editor Tabs */}
-                <div className="flex items-center justify-between px-4 md:px-6 py-4 border-b border-slate-800 bg-slate-950/50">
-                    <div className="flex gap-2 overflow-x-auto no-scrollbar">
-                        <TabButton active={viewMode === 'request'} onClick={() => setViewMode('request')} label="Request Code" icon={Code}/>
-                        <TabButton active={viewMode === 'response'} onClick={() => setViewMode('response')} label="Response Example" icon={FileJson}/>
-                        <TabButton active={viewMode === 'schema'} onClick={() => setViewMode('schema')} label="Field Reference" icon={BookOpen}/>
+        {/* RIGHT CODE VIEWER */}
+        <div className="lg:col-span-8 h-full">
+            <div className="bg-slate-900 rounded-3xl border border-slate-800 shadow-2xl flex flex-col h-full min-h-[600px] overflow-hidden">
+                <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-950/50">
+                    <div className="flex gap-4">
+                        <TabBtn active={viewMode==='request'} onClick={()=>setViewMode('request')} label="Request Body"/>
+                        <TabBtn active={viewMode==='response'} onClick={()=>setViewMode('response')} label="Response JSON"/>
+                        <TabBtn active={viewMode==='schema'} onClick={()=>setViewMode('schema')} label="Field Reference"/>
                     </div>
-                    {viewMode !== 'schema' && (
-                        <button 
-                            onClick={() => copyToClipboard(viewMode === 'request' ? getCodeSnippet() || "" : getCurrentResponse(), false)}
-                            className="hidden md:flex items-center gap-2 text-xs font-bold text-slate-400 hover:text-white transition-colors ml-4 shrink-0"
-                        >
-                            {copiedSnippet ? <Check size={14} className="text-green-500"/> : <Copy size={14}/>}
-                            {copiedSnippet ? "Copied!" : "Copy"}
-                        </button>
-                    )}
+                    <button onClick={()=>copyToClipboard(viewMode==='request' ? getCodeSnippet() : getCurrentResponse(), false)} className="text-slate-400 hover:text-white flex items-center gap-2 text-xs font-bold transition-all">
+                        {copiedSnippet ? <Check size={14} className="text-green-500"/> : <Copy size={14}/>} {copiedSnippet ? "Copied" : "Copy"}
+                    </button>
                 </div>
 
-                {/* Content Area */}
-                <div className="flex-1 p-4 md:p-6 overflow-auto custom-scrollbar bg-[#0D1117] relative">
-                    
-                    {viewMode === 'request' && (
-                        <pre className="font-mono text-[10px] md:text-sm leading-relaxed text-blue-300 animate-in fade-in whitespace-pre-wrap md:whitespace-pre">
-                            {getCodeSnippet()}
-                        </pre>
-                    )}
-
-                    {viewMode === 'response' && (
-                        <pre className="font-mono text-[10px] md:text-sm leading-relaxed text-emerald-400 animate-in fade-in whitespace-pre-wrap md:whitespace-pre">
-                            {getCurrentResponse()}
-                        </pre>
-                    )}
-
+                <div className="flex-1 p-6 font-mono text-sm overflow-auto custom-scrollbar bg-[#0D1117]">
+                    {viewMode === 'request' && <pre className="text-blue-300 whitespace-pre-wrap leading-relaxed animate-in fade-in">{getCodeSnippet()}</pre>}
+                    {viewMode === 'response' && <pre className="text-emerald-400 whitespace-pre-wrap leading-relaxed animate-in fade-in">{getCurrentResponse()}</pre>}
                     {viewMode === 'schema' && (
-                        <div className="animate-in fade-in space-y-6 overflow-x-auto">
+                        <div className="space-y-8 min-w-[600px] pb-10 animate-in fade-in">
                             {apiOperation === 'create' ? (
                                 <>
-                                    <SchemaTable title="Sender Details" fields={[
-                                        { name: "sender_name", type: "String", req: "Yes", desc: "Name of the business/sender." },
-                                        { name: "sender_phone", type: "String", req: "Yes", desc: "10-digit mobile number." },
-                                        { name: "sender_address", type: "String", req: "Yes", desc: "Building, Street, Area." },
-                                        { name: "sender_city", type: "String", req: "Yes", desc: "City name (e.g. Mumbai)." },
-                                        { name: "sender_pincode", type: "String", req: "Yes", desc: "6-digit postal code." },
+                                    <SchemaSection title="1. Identity & Corporate" fields={[
+                                        { field: "client_order_id", type: "string", req: "No", desc: "Your internal order number." },
+                                        { field: "ship_from_company", type: "string", req: "No", desc: "Pickup business name." },
+                                        { field: "ship_to_company", type: "string", req: "No", desc: "Receiver business name." },
                                     ]}/>
-                                    <SchemaTable title="Receiver Details" fields={[
-                                        { name: "receiver_name", type: "String", req: "Yes", desc: "Customer's full name." },
-                                        { name: "receiver_phone", type: "String", req: "Yes", desc: "Customer's mobile number." },
-                                        { name: "receiver_address", type: "String", req: "Yes", desc: "Full delivery address." },
-                                        { name: "receiver_pincode", type: "String", req: "Yes", desc: "Destination pincode." },
+                                    <SchemaSection title="2. Address Mapping" fields={[
+                                        { field: "sender_name", type: "string", req: "Yes", desc: "Full name of the shipper." },
+                                        { field: "sender_phone", type: "string", req: "Yes", desc: "10-digit mobile number." },
+                                        { field: "sender_address", type: "string", req: "Yes", desc: "Full pickup street address." },
+                                        { field: "sender_pincode", type: "string", req: "Yes", desc: "6-digit pickup ZIP code." },
+                                        { field: "receiver_name", type: "string", req: "Yes", desc: "Customer full name." },
+                                        { field: "receiver_phone", type: "string", req: "Yes", desc: "10-digit delivery contact." },
+                                        { field: "receiver_address", type: "string", req: "Yes", desc: "Full delivery street address." },
+                                        { field: "receiver_pincode", type: "string", req: "Yes", desc: "6-digit delivery ZIP code." },
                                     ]}/>
-                                    <SchemaTable title="Shipment Info" fields={[
-                                        { name: "weight", type: "Number", req: "Yes", desc: "Weight in KG (e.g. 0.5)." },
-                                        { name: "payment_mode", type: "String", req: "Yes", desc: "'Prepaid' or 'COD'." },
-                                        { name: "cod_amount", type: "Number", req: "Cond", desc: "Required if mode is COD." },
+                                    <SchemaSection title="3. Financials & Logistics" fields={[
+                                        { field: "payment_mode", type: "enum", req: "Yes", desc: "'Prepaid' or 'COD'." },
+                                        { field: "cod_amount", type: "number", req: "Cond.", desc: "Required only if payment_mode is COD." },
+                                        { field: "declared_value", type: "number", req: "Yes", desc: "Product value for insurance." },
+                                        { field: "weight", type: "number", req: "Yes", desc: "Weight in KG (minimum 0.5)." },
+                                    ]}/>
+                                    <SchemaSection title="4. Dimensions (CM)" fields={[
+                                        { field: "length", type: "number", req: "No", desc: "Default: 10 CM." },
+                                        { field: "width", type: "number", req: "No", desc: "Default: 10 CM." },
+                                        { field: "height", type: "number", req: "No", desc: "Default: 10 CM." },
+                                        { field: "identical_package_count", type: "int", req: "No", desc: "Total number of boxes." },
                                     ]}/>
                                 </>
                             ) : (
-                                <SchemaTable title="Tracking Response (Bulk)" fields={[
-                                    { name: "success", type: "Boolean", req: "Yes", desc: "Request status." },
-                                    { name: "total_found", type: "Number", req: "Yes", desc: "Count of matching AWBs." },
-                                    { name: "data[].status.current", type: "String", req: "Yes", desc: "Status (e.g. In Transit)." },
-                                    { name: "data[].status.current_location", type: "String", req: "Yes", desc: "Latest scanned location." },
-                                    { name: "data[].status.last_updated", type: "Date", req: "Yes", desc: "ISO Date of last event." },
-                                    { name: "data[].history", type: "Array", req: "Yes", desc: "Full tracking timeline events." },
+                                <SchemaSection title="Tracking Schema" fields={[
+                                    { field: "awb", type: "string", req: "Yes", desc: "Internal code (UEX...)." },
+                                    { field: "status.current", type: "string", req: "Yes", desc: "Latest status (e.g. In Transit)." },
+                                    { field: "history[]", type: "array", req: "Yes", desc: "Event timeline array." },
                                 ]}/>
                             )}
                         </div>
@@ -410,115 +285,108 @@ echo $response;`;
                 </div>
             </div>
         </div>
-
-      </motion.div>
+      </div>
     </motion.div>
   );
 }
 
-// 🧩 SUB-COMPONENTS
-
-function StepCard({ number, title, desc }: { number: string, title: string, desc: string }) {
+// 🧩 INTERNAL COMPONENTS
+function EndpointTab({ active, onClick, icon, label }: any) {
     return (
-        <div className="bg-white/60 dark:bg-slate-900/60 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 flex items-start gap-4 hover:bg-white/80 dark:hover:bg-slate-900/80 transition-colors">
-            <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-800 flex items-center justify-center font-bold text-slate-600 dark:text-slate-400 shrink-0 border border-slate-300 dark:border-slate-700">
-                {number}
+        <button onClick={onClick} className={`flex items-center gap-3 px-4 py-2.5 rounded-xl border text-xs font-bold transition-all ${active ? 'bg-blue-600 border-blue-700 text-white shadow-lg' : 'bg-slate-50 dark:bg-slate-800 border-transparent text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700'}`}>
+            {icon} {label}
+        </button>
+    );
+}
+
+function TabBtn({ active, onClick, label }: any) {
+    return (
+        <button onClick={onClick} className={`text-xs font-bold pb-2 border-b-2 transition-all ${active ? 'border-blue-500 text-blue-500' : 'border-transparent text-slate-500 hover:text-slate-300'}`}>
+            {label}
+        </button>
+    );
+}
+
+function SchemaSection({ title, fields }: { title: string, fields: any[] }) {
+    return (
+        <div className="bg-slate-900/50 rounded-xl p-4 border border-slate-800">
+            <h4 className="text-violet-400 font-bold text-[11px] uppercase tracking-widest mb-4 border-b border-slate-800 pb-2">{title}</h4>
+            <div className="grid grid-cols-12 gap-2 text-[10px] text-slate-500 font-black mb-2 px-2">
+                <div className="col-span-4">PROPERTY</div><div className="col-span-2">TYPE</div><div className="col-span-2">REQUIRED</div><div className="col-span-4">DESCRIPTION</div>
             </div>
-            <div>
-                <h4 className="font-bold text-slate-900 dark:text-white text-sm">{title}</h4>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">{desc}</p>
+            <div className="space-y-1">
+                {fields.map((f, i) => (
+                    <div key={i} className="grid grid-cols-12 gap-2 bg-slate-800/20 p-2 rounded-lg items-center hover:bg-slate-800/50 transition-colors">
+                        <div className="col-span-4 font-mono text-blue-300 text-[12px]">{f.field}</div>
+                        <div className="col-span-2 text-purple-400 text-[11px]">{f.type}</div>
+                        <div className="col-span-2"><span className={`px-1.5 py-0.5 rounded text-[10px] ${f.req==='Yes' ? 'bg-red-500/10 text-red-400' : 'bg-slate-700 text-slate-400'}`}>{f.req}</span></div>
+                        <div className="col-span-4 text-slate-400 text-[11px] leading-tight">{f.desc}</div>
+                    </div>
+                ))}
             </div>
         </div>
-    )
+    );
 }
 
-function LanguageOption({ label, icon, active, onClick }: any) {
-    return (
-        <button 
-            onClick={onClick}
-            className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border text-sm font-bold transition-all ${active ? 'bg-blue-50 dark:bg-blue-900/10 border-blue-500 text-blue-600 dark:text-blue-400' : 'bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-500 hover:border-slate-400'}`}
-        >
-            <span className="flex items-center gap-2"><span className="text-lg">{icon}</span> {label}</span>
-            {active && <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>}
-        </button>
-    )
-}
-
-function TabButton({ active, onClick, label, icon: Icon }: any) {
-    return (
-        <button 
-            onClick={onClick} 
-            className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-all flex items-center gap-2 whitespace-nowrap ${active ? 'bg-slate-800 text-white' : 'text-slate-500 hover:text-slate-300'}`}
-        >
-            <Icon size={14}/> {label}
-        </button>
-    )
-}
-
-function SchemaTable({ title, fields }: { title: string, fields: any[] }) {
-    return (
-        <div className="min-w-[500px]">
-            <h4 className="text-violet-400 font-bold text-sm mb-2 px-1 border-b border-slate-800 pb-2">{title}</h4>
-            <table className="w-full text-left border-collapse">
-                <thead>
-                    <tr className="text-xs text-slate-500 border-b border-slate-800">
-                        <th className="py-2 pl-1 w-32">Field</th>
-                        <th className="py-2 w-20">Type</th>
-                        <th className="py-2 w-16">Required</th>
-                        <th className="py-2">Description</th>
-                    </tr>
-                </thead>
-                <tbody className="text-xs text-slate-300">
-                    {fields.map((f, i) => (
-                        <tr key={i} className="border-b border-slate-800/50 hover:bg-white/5 transition-colors">
-                            <td className="py-2 pl-1 font-mono text-blue-300">{f.name}</td>
-                            <td className="py-2 text-purple-400">{f.type}</td>
-                            <td className="py-2">
-                                <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${f.req === 'Yes' ? 'bg-red-900/30 text-red-400' : 'bg-slate-800 text-slate-400'}`}>{f.req}</span>
-                            </td>
-                            <td className="py-2 text-slate-400">{f.desc}</td>
-                        </tr>
-                    ))}
-                </tbody>
-            </table>
-        </div>
-    )
-}
-
-// 📦 DUMMY DATA FOR CODE GEN
+// 📦 API DUMMY DATA
 const singleOrderObj = {
-  sender_name: "My Store",
+  client_order_id: "ORD-99881",
+  ship_from_company: "Global Warehouse",
+  sender_name: "Sonu Kumar",
   sender_phone: "9876543210",
-  sender_address: "123 Market St",
+  sender_address: "B-102, Industrial Estate",
   sender_city: "Mumbai",
   sender_state: "Maharashtra",
   sender_pincode: "400001",
-  receiver_name: "Rahul Sharma",
+  ship_to_company: "Acme Corp Ltd",
+  receiver_name: "Rahul Verma",
   receiver_phone: "9123456789",
-  receiver_address: "Flat 101, Green Apts",
+  receiver_address: "Suite 405, Tech Plaza",
   receiver_city: "Delhi",
   receiver_state: "Delhi",
   receiver_pincode: "110001",
   weight: 0.5,
+  length: 10, width: 10, height: 10,
+  identical_package_count: 1,
   package_type: "Standard Box",
+  product_description: "Electronics",
   payment_mode: "Prepaid",
-  declared_value: 1500
+  declared_value: 2500
 };
 
 const bulkOrderObj = [
-  { ...singleOrderObj, receiver_name: "Amit Verma", payment_mode: "COD", cod_amount: 2500 },
-  { ...singleOrderObj, receiver_name: "Priya Singh", weight: 1.2 }
+  { ...singleOrderObj, client_order_id: "ORD-99882", payment_mode: "COD", cod_amount: 3000 },
+  { ...singleOrderObj, client_order_id: "ORD-99883", receiver_name: "Anjali Gupta" }
 ];
 
-const responseJsonCreate = `{
+const responseJsonCreateSingle = `{
   "success": true,
   "message": "1 Shipment(s) booked successfully",
   "data": [
     {
-      "awb_code": "UEX28374928",
-      "receiver_name": "Rahul Sharma",
+      "awb_code": "UEX48291039",
+      "client_order_id": "ORD-99881",
       "status": "created",
-      "label_url": "https://www.universalexpress.live/print/UEXxxxxxx97"
+      "label_url": "https://www.universalexpress.live/print/UEX48291039"
+    }
+  ]
+}`;
+
+const responseJsonCreateBulk = `{
+  "success": true,
+  "message": "2 Shipment(s) booked successfully",
+  "data": [
+    {
+      "awb_code": "UEX48291039",
+      "client_order_id": "ORD-99882",
+      "status": "created",
+      "label_url": "https://www.universalexpress.live/print/UEX48291039"
+    },
+    {
+      "awb_code": "UEX48291040",
+      "client_order_id": "ORD-99883",
+      "status": "created",
+      "label_url": "https://www.universalexpress.live/print/UEX48291040"
     }
   ]
 }`;
@@ -526,18 +394,16 @@ const responseJsonCreate = `{
 const responseJsonTrackSingle = `{
   "success": true,
   "data": {
-    "awb": "UEX12345678",
-    "reference_id": "REF-001",
+    "awb": "UEX48291039",
     "status": {
-      "current": "in_transit",
-      "booked_on": "2024-03-10T10:00:00Z"
+        "current": "In Transit",
+        "booked_on": "2026-02-26T10:00:00Z"
     },
+    "route": { "origin": "Mumbai, Maharashtra", "destination": "Delhi, Delhi" },
+    "financials": { "payment_mode": "Prepaid", "cod_to_collect": 0, "insured_value": 2500 },
     "history": [
-      {
-        "status": "in_transit",
-        "location": "Hub Mumbai",
-        "timestamp": "2024-03-11T14:30:00Z"
-      }
+        { "status": "In Transit", "location": "Mumbai Hub", "timestamp": "..." },
+        { "status": "Pending", "location": "Mumbai", "timestamp": "..." }
     ]
   }
 }`;
@@ -548,30 +414,16 @@ const responseJsonTrackBulk = `{
   "total_found": 2,
   "data": [
     {
-      "awb": "UEX12345678",
-      "reference_id": "REF-001",
-      "status": { 
-        "current": "in_transit",
-        "current_location": "Hub Mumbai",
-        "last_updated": "2024-03-12T14:00:00Z" 
-      },
-      "history": [
-        {
-          "status": "in_transit",
-          "location": "Hub Mumbai",
-          "timestamp": "2024-03-12T14:00:00Z"
-        }
-      ]
+      "awb": "UEX48291039",
+      "status": { "current": "Pending", "booked_on": "..." },
+      "route": { "origin": "Mumbai", "destination": "Delhi" },
+      "history": [...]
     },
     {
-      "awb": "UEX87654321",
-      "reference_id": "REF-002",
-      "status": { 
-        "current": "delivered",
-        "current_location": "Delhi",
-        "last_updated": "2024-03-13T09:15:00Z" 
-      },
-      "history": [ ... ]
+      "awb": "UEX48291040",
+      "status": { "current": "Delivered", "booked_on": "..." },
+      "route": { "origin": "Mumbai", "destination": "Pune" },
+      "history": [...]
     }
   ]
 }`;

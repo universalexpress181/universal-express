@@ -47,27 +47,26 @@ export async function POST(request: Request) {
     }
 
     // ---------------------------------------------------------
-    // 3. FETCH SHIPMENTS (Bulk)
+    // 3. FETCH SHIPMENTS (Bulk - reference_id REMOVED)
     // ---------------------------------------------------------
     const { data: shipments, error: shipError } = await supabaseAdmin
       .from('shipments')
       .select(`
-        id, awb_code, reference_id, current_status, created_at,
+        id, awb_code, current_status, created_at,
         sender_name, sender_city, sender_state,
         receiver_name, receiver_city, receiver_state,
         weight, package_type,
-        payment_mode, cod_amount, declared_value, cost,
+        payment_mode, cod_amount, declared_value,
         payment_status
       `)
       .eq('user_id', userId)
-      .in('awb_code', awbs); // ⚡ Optimized: Fetch all matches in one query
+      .in('awb_code', awbs); // Fetch all matches in one query
 
     if (shipError) throw shipError;
 
     // ---------------------------------------------------------
     // 4. FETCH TRACKING HISTORY (Bulk Optimization)
     // ---------------------------------------------------------
-    // Extract IDs to fetch all related events in one go
     const shipmentIds = shipments.map(s => s.id);
     
     const { data: allEvents } = await supabaseAdmin
@@ -77,7 +76,7 @@ export async function POST(request: Request) {
       .order('timestamp', { ascending: false });
 
     // ---------------------------------------------------------
-    // 5. LOGGING
+    // 5. LOGGING & USAGE
     // ---------------------------------------------------------
     supabaseAdmin.rpc('increment_key_usage', { key_id: keyData.id });
 
@@ -99,7 +98,7 @@ export async function POST(request: Request) {
         
         return {
             awb: shipment.awb_code,
-            reference_id: shipment.reference_id,
+            // ❌ reference_id is strictly excluded from this white-labeled response
             status: {
                 current: shipment.current_status === 'created' ? 'Pending' : shipment.current_status,
                 booked_on: shipment.created_at,
@@ -124,7 +123,7 @@ export async function POST(request: Request) {
             documents: {
                 label_url: `${process.env.NEXT_PUBLIC_SITE_URL}/print/${shipment.awb_code}`
             },
-            history: history
+            history: history // Timeline of events for this specific shipment
         };
     });
 

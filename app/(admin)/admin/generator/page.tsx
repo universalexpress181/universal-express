@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import { 
   Package, User, MapPin, Phone, Truck, CreditCard, 
-  Save, RefreshCw, Box, Layers, ChevronDown, Check 
+  Save, RefreshCw, Box, Layers, ChevronDown, Check, Info 
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -26,7 +26,7 @@ export default function ShipmentGeneratorPage() {
   // 📝 Form State
   const [formData, setFormData] = useState({
     user_id: "", 
-    service_type: "Standard",
+    service_type: "Prime", // Defaulted to Prime
     payment_mode: "Prepaid",
     
     // Sender
@@ -82,11 +82,38 @@ export default function ShipmentGeneratorPage() {
     setLoading(true);
 
     try {
+      // Generate the internal Universal Express AWB
       const awb_code = `UEX${Math.floor(10000000 + Math.random() * 90000000)}`;
+      
+      // Determine what service we are requesting from the Bank
+      const requestedService = formData.payment_mode === 'COD' ? 'COD' : formData.service_type;
 
+      // 1. 🚨 ALLOCATE AWB FROM BANK (Using the RPC function we built)
+      const { data: allocatedPartnerAwb, error: rpcError } = await supabase.rpc('allocate_next_awb', { 
+          requested_service: requestedService, 
+          target_uex_awb: awb_code 
+      });
+
+      if (rpcError) throw rpcError;
+
+      // If stock is zero, stop and alert!
+      if (!allocatedPartnerAwb) {
+          alert(`❌ Out of stock for ${requestedService} AWBs! Please upload more inventory in the AWB Bank.`);
+          setLoading(false);
+          return;
+      }
+
+      // Determine Partner Name for Database tracking
+      let partnerName = 'DTDC';
+      if (requestedService === 'Ground Cargo') partnerName = 'DPWORLD';
+
+      // 2. 📦 BUILD SHIPMENT PAYLOAD
       const shipmentPayload = {
         ...formData,
         awb_code,
+        partner_awb: allocatedPartnerAwb, // <--- Save Advanced AWB as Reference
+        partner_name: partnerName,
+        service_type: requestedService,   // Explicitly save the service
         weight: Number(formData.weight) || 0.5,
         cod_amount: formData.payment_mode === 'COD' ? Number(formData.cod_amount) : 0,
         declared_value: Number(formData.declared_value) || 0,
@@ -94,12 +121,14 @@ export default function ShipmentGeneratorPage() {
         created_at: new Date().toISOString()
       };
 
+      // 3. INSERT INTO DATABASE
       const { error } = await supabase.from('shipments').insert([shipmentPayload]);
 
       if (error) throw error;
 
-      alert(`✅ Shipment Generated Successfully!\nAWB: ${awb_code}`);
+      alert(`✅ Shipment Generated Successfully!\nInternal AWB: ${awb_code}\nPartner Reference: ${allocatedPartnerAwb}`);
       
+      // Clear specific fields for next entry
       setFormData(prev => ({ 
           ...prev, awb_code: "", receiver_name: "", receiver_phone: "", receiver_address: "", receiver_pincode: ""
       }));
@@ -126,7 +155,7 @@ export default function ShipmentGeneratorPage() {
                 Shipment Generator
             </h1>
             <p className="text-slate-500 dark:text-slate-400 text-sm mt-1 font-medium ml-1">
-                Create internal shipments instantly.
+                Create internal shipments and pull instant AWBs from the Bank.
             </p>
         </div>
       </div>
@@ -182,47 +211,21 @@ export default function ShipmentGeneratorPage() {
                 </h3>
                 
                 <div className="space-y-5">
-                    {/* Service Type */}
+                    {/* Payment Mode (Moved UP because it controls Service Mode) */}
                     <div>
-                        <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">Service Mode</label>
-                        <div className="grid grid-cols-2 gap-2">
-                            {['Standard', 'Express'].map(mode => (
-                                <button
-                                    key={mode}
-                                    onClick={() => setFormData({...formData, service_type: mode})}
-                                    className={`py-2.5 rounded-xl text-sm font-bold transition-all border ${
-                                        formData.service_type === mode 
-                                        ? 'bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-500/30' 
-                                        : 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700'
-                                    }`}
-                                >
-                                    {mode}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                        <InputField label="Weight (kg)" name="weight" type="number" value={formData.weight} onChange={handleChange} />
-                        
-                        {/* 🎨 COOL CUSTOM DROPDOWN */}
-                        <CustomDropdown 
-                            label="Package Type"
-                            options={packageOptions.length > 0 ? packageOptions : ["Box"]}
-                            selected={formData.package_type}
-                            onChange={handleDropdownChange}
-                            icon={<Layers size={16} />}
-                        />
-                    </div>
-
-                    {/* Payment */}
-                    <div className="pt-4 border-t border-slate-100 dark:border-slate-800">
-                        <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">Payment</label>
-                        <div className="grid grid-cols-2 gap-2 mb-4">
+                        <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">Payment Option</label>
+                        <div className="grid grid-cols-2 gap-2 mb-2">
                             {['Prepaid', 'COD'].map(mode => (
                                 <button
                                     key={mode}
-                                    onClick={() => setFormData({...formData, payment_mode: mode})}
+                                    onClick={() => {
+                                      setFormData(prev => ({
+                                        ...prev, 
+                                        payment_mode: mode,
+                                        // Auto-lock or unlock service types based on payment
+                                        service_type: mode === 'COD' ? 'COD' : 'Prime'
+                                      }));
+                                    }}
                                     className={`py-2.5 rounded-xl text-sm font-bold transition-all border ${
                                         formData.payment_mode === mode 
                                         ? 'bg-emerald-600 text-white border-emerald-600 shadow-md shadow-emerald-500/30' 
@@ -234,25 +237,69 @@ export default function ShipmentGeneratorPage() {
                             ))}
                         </div>
                         
+                        {/* Dynamic Payment Input */}
+                        <div className="mt-4">
+                            {formData.payment_mode === 'COD' ? (
+                                <InputField 
+                                    label="COD Amount (₹)" 
+                                    name="cod_amount" 
+                                    type="number" 
+                                    value={formData.cod_amount} 
+                                    onChange={handleChange} 
+                                    icon={<CreditCard size={16}/>}
+                                />
+                            ) : (
+                                <InputField 
+                                    label="Declared Value (₹)" 
+                                    name="declared_value" 
+                                    type="number" 
+                                    value={formData.declared_value} 
+                                    onChange={handleChange} 
+                                />
+                            )}
+                        </div>
+                    </div>
+
+                    <hr className="border-slate-100 dark:border-slate-800" />
+
+                    {/* Service Mode Selection */}
+                    <div>
+                        <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">Delivery Service</label>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                            {['Prime', 'Air/Ground Express', 'Ground Cargo'].map(mode => (
+                                <button
+                                    key={mode}
+                                    disabled={formData.payment_mode === 'COD'}
+                                    onClick={() => setFormData({...formData, service_type: mode})}
+                                    className={`py-2 px-1 rounded-xl text-xs font-bold transition-all border ${
+                                        formData.payment_mode === 'COD'
+                                        ? 'bg-slate-100 dark:bg-slate-800/40 text-slate-400 dark:text-slate-600 border-transparent cursor-not-allowed opacity-60'
+                                        : formData.service_type === mode 
+                                            ? 'bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-500/30' 
+                                            : 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700'
+                                    }`}
+                                >
+                                    {mode}
+                                </button>
+                            ))}
+                        </div>
                         {formData.payment_mode === 'COD' && (
-                            <InputField 
-                                label="COD Amount (₹)" 
-                                name="cod_amount" 
-                                type="number" 
-                                value={formData.cod_amount} 
-                                onChange={handleChange} 
-                                icon={<CreditCard size={16}/>}
-                            />
+                            <p className="text-[10px] text-orange-500 mt-2 flex items-center gap-1 font-bold">
+                                <Info size={12}/> Locked to COD Service Bank.
+                            </p>
                         )}
-                        {formData.payment_mode === 'Prepaid' && (
-                             <InputField 
-                                label="Declared Value (₹)" 
-                                name="declared_value" 
-                                type="number" 
-                                value={formData.declared_value} 
-                                onChange={handleChange} 
-                            />
-                        )}
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <InputField label="Weight (kg)" name="weight" type="number" value={formData.weight} onChange={handleChange} />
+                        
+                        <CustomDropdown 
+                            label="Package Type"
+                            options={packageOptions.length > 0 ? packageOptions : ["Box"]}
+                            selected={formData.package_type}
+                            onChange={handleDropdownChange}
+                            icon={<Layers size={16} />}
+                        />
                     </div>
                 </div>
             </motion.div>
@@ -264,7 +311,7 @@ export default function ShipmentGeneratorPage() {
                 disabled={loading}
                 className="w-full py-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-2xl font-bold text-lg shadow-xl shadow-blue-500/20 flex items-center justify-center gap-3 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
-                {loading ? <RefreshCw className="animate-spin" /> : <><Save size={20} /> Create Shipment</>}
+                {loading ? <RefreshCw className="animate-spin" /> : <><Save size={20} /> Generate Shipment</>}
             </motion.button>
 
         </div>
@@ -291,7 +338,7 @@ function InputField({ label, icon, ...props }: any) {
     );
 }
 
-// ✨ NEW: COOL CUSTOM DROPDOWN COMPONENT
+// ✨ COOL CUSTOM DROPDOWN COMPONENT
 function CustomDropdown({ label, options, selected, onChange, icon }: any) {
     const [isOpen, setIsOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
@@ -316,11 +363,11 @@ function CustomDropdown({ label, options, selected, onChange, icon }: any) {
                 onClick={() => setIsOpen(!isOpen)}
                 className={`w-full bg-slate-50 dark:bg-slate-800/50 border ${isOpen ? 'border-blue-500 ring-2 ring-blue-500/20' : 'border-slate-200 dark:border-slate-700'} rounded-xl px-4 py-3 text-sm font-medium text-slate-900 dark:text-white cursor-pointer flex items-center justify-between transition-all`}
             >
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 truncate">
                     {icon && <span className="text-slate-400">{icon}</span>}
                     <span className="truncate">{selected || "Select Type"}</span>
                 </div>
-                <ChevronDown size={16} className={`text-slate-400 transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`} />
+                <ChevronDown size={16} className={`text-slate-400 flex-shrink-0 transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`} />
             </div>
 
             {/* Dropdown Menu */}
