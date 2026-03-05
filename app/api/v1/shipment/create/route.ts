@@ -126,7 +126,7 @@ export async function POST(request: Request) {
             payment_mode: mode,
             cod_amount: codAmount,
             declared_value: declaredValue,
-            current_status: 'order_placed'
+            current_status: 'created'
         });
 
         // --- E. ADD TO RESPONSE (White-Labeled) ---
@@ -136,7 +136,7 @@ export async function POST(request: Request) {
             client_order_id: item.client_order_id || undefined,
             receiver_name: item.receiver_name,
             payment_mode: mode,
-            status: "order_placed",
+            status: "created",
             label_url: `${process.env.NEXT_PUBLIC_SITE_URL}/print/${awb}`
         });
     }
