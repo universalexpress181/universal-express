@@ -56,9 +56,8 @@ export async function POST(request: Request) {
         sender_name, sender_city, sender_state,
         receiver_name, receiver_city, receiver_state,
         weight, package_type,
-        payment_mode, cod_amount, declared_value,
-        payment_status
-      `)
+        payment_mode, cod_amount, declared_value
+      `) // ❌ Removed payment_status here
       .eq('user_id', userId)
       .in('awb_code', awbs); // Fetch all matches in one query
 
@@ -67,20 +66,23 @@ export async function POST(request: Request) {
     // ---------------------------------------------------------
     // 4. FETCH TRACKING HISTORY (Bulk Optimization)
     // ---------------------------------------------------------
+    // Extract IDs to fetch all related events at once
     const shipmentIds = shipments.map(s => s.id);
     
+    // 🚀 Added remark_status_code here
     const { data: allEvents } = await supabaseAdmin
       .from('tracking_events')
-      .select('shipment_id, status, location, description, timestamp')
+      .select('shipment_id, status, location, description, timestamp, remark_status_code')
       .in('shipment_id', shipmentIds)
       .order('timestamp', { ascending: false });
 
     // ---------------------------------------------------------
     // 5. LOGGING & USAGE
     // ---------------------------------------------------------
-    supabaseAdmin.rpc('increment_key_usage', { key_id: keyData.id });
+    // Added 'await' to ensure logs complete
+    await supabaseAdmin.rpc('increment_key_usage', { key_id: keyData.id });
 
-    supabaseAdmin.from('api_logs').insert({
+    await supabaseAdmin.from('api_logs').insert({
         user_id: userId,
         endpoint: '/api/v1/shipment/track/bulk',
         method: 'POST',
@@ -93,8 +95,10 @@ export async function POST(request: Request) {
     // 6. MAP RESPONSE (Combine Shipment + History)
     // ---------------------------------------------------------
     const results = shipments.map(shipment => {
-        // Filter history events specific to this shipment
-        const history = allEvents?.filter(e => e.shipment_id === shipment.id) || [];
+        // Filter history events specific to this shipment and strip out the internal shipment_id
+        const history = allEvents
+            ?.filter(e => e.shipment_id === shipment.id)
+            .map(({ shipment_id, ...rest }) => rest) || [];
         
         return {
             awb: shipment.awb_code,
@@ -123,7 +127,7 @@ export async function POST(request: Request) {
             documents: {
                 label_url: `${process.env.NEXT_PUBLIC_SITE_URL}/print/${shipment.awb_code}`
             },
-            history: history // Timeline of events for this specific shipment
+            history: history // Clean timeline of events including remark_status_code
         };
     });
 
