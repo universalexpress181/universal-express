@@ -247,6 +247,7 @@ export default function DeveloperSettings() {
                                 <>
                                     <SchemaSection title="1. Identity & Corporate" fields={[
                                         { field: "client_order_id", type: "string", req: "No", desc: "Your internal order number." },
+                                        { field: "service_type", type: "string", req: "No", desc: "e.g., 'Prime' or 'Air/Ground Express'. Defaults to Prime." },
                                         { field: "ship_from_company", type: "string", req: "No", desc: "Pickup business name." },
                                         { field: "ship_to_company", type: "string", req: "No", desc: "Receiver business name." },
                                     ]}/>
@@ -274,11 +275,22 @@ export default function DeveloperSettings() {
                                     ]}/>
                                 </>
                             ) : (
-                                <SchemaSection title="Tracking Schema" fields={[
-                                    { field: "awb", type: "string", req: "Yes", desc: "Internal code (UEX...)." },
-                                    { field: "status.current", type: "string", req: "Yes", desc: "Latest status (e.g. In Transit)." },
-                                    { field: "history[]", type: "array", req: "Yes", desc: "Event timeline array." },
-                                ]}/>
+                                <>
+                                  <SchemaSection title="Tracking Schema" fields={[
+                                      { field: "awb", type: "string", req: "Yes", desc: "Internal code (UEX...)." },
+                                      { field: "status.current", type: "string", req: "Yes", desc: "Latest human-readable status." },
+                                      { field: "history[]", type: "array", req: "Yes", desc: "Chronological event timeline array." },
+                                      { field: "history[].remark_status_code", type: "string", req: "Yes", desc: "Master numeric status code for logic mapping." },
+                                  ]}/>
+                                  <SchemaSection title="Master Status Codes (Reference)" fields={[
+                                      { field: "200 - 312", type: "code", req: "-", desc: "IN-TRANSIT (Moving between hubs / Out for delivery)" },
+                                      { field: "400", type: "code", req: "-", desc: "DELIVERED (Successfully handed to consignee)" },
+                                      { field: "500 - 528", type: "code", req: "-", desc: "UNDELIVERED (Refused, Closed, Address Issue, etc.)" },
+                                      { field: "600 - 644", type: "code", req: "-", desc: "RTO (Return to Origin initiated or delivered)" },
+                                      { field: "900 - 900B", type: "code", req: "-", desc: "PICKUP CANCELLED (By client or due to damage)" },
+                                      { field: "901 / 902", type: "code", req: "-", desc: "LOST / DAMAGED (Shipment lost or unusable)" },
+                                  ]}/>
+                                </>
                             )}
                         </div>
                     )}
@@ -331,6 +343,7 @@ function SchemaSection({ title, fields }: { title: string, fields: any[] }) {
 // 📦 API DUMMY DATA
 const singleOrderObj = {
   client_order_id: "ORD-99881",
+  service_type: "Air/Ground Express",
   ship_from_company: "Global Warehouse",
   sender_name: "Sonu Kumar",
   sender_phone: "9876543210",
@@ -356,7 +369,7 @@ const singleOrderObj = {
 
 const bulkOrderObj = [
   { ...singleOrderObj, client_order_id: "ORD-99882", payment_mode: "COD", cod_amount: 3000 },
-  { ...singleOrderObj, client_order_id: "ORD-99883", receiver_name: "Anjali Gupta" }
+  { ...singleOrderObj, client_order_id: "ORD-99883", receiver_name: "Anjali Gupta", service_type: "Prime" }
 ];
 
 const responseJsonCreateSingle = `{
@@ -366,7 +379,7 @@ const responseJsonCreateSingle = `{
     {
       "awb_code": "UEX48291039",
       "client_order_id": "ORD-99881",
-      "status": "created",
+      "status": "order_placed",
       "label_url": "https://www.universalexpress.live/print/UEX48291039"
     }
   ]
@@ -379,13 +392,13 @@ const responseJsonCreateBulk = `{
     {
       "awb_code": "UEX48291039",
       "client_order_id": "ORD-99882",
-      "status": "created",
+      "status": "order_placed",
       "label_url": "https://www.universalexpress.live/print/UEX48291039"
     },
     {
       "awb_code": "UEX48291040",
       "client_order_id": "ORD-99883",
-      "status": "created",
+      "status": "order_placed",
       "label_url": "https://www.universalexpress.live/print/UEX48291040"
     }
   ]
@@ -396,14 +409,29 @@ const responseJsonTrackSingle = `{
   "data": {
     "awb": "UEX48291039",
     "status": {
-        "current": "In Transit",
-        "booked_on": "2026-02-26T10:00:00Z"
+        "current": "IN-TRANSIT",
+        "booked_on": "2026-03-04T10:00:00Z"
     },
     "route": { "origin": "Mumbai, Maharashtra", "destination": "Delhi, Delhi" },
+    "parties": { "sender": "Sonu Kumar", "receiver": "Rahul Verma" },
+    "details": { "weight": 0.5, "type": "Standard Box" },
     "financials": { "payment_mode": "Prepaid", "cod_to_collect": 0, "insured_value": 2500 },
+    "documents": { "label_url": "https://www.universalexpress.live/print/UEX48291039" },
     "history": [
-        { "status": "In Transit", "location": "Mumbai Hub", "timestamp": "..." },
-        { "status": "Pending", "location": "Mumbai", "timestamp": "..." }
+        { 
+          "status": "IN-TRANSIT", 
+          "location": "Mumbai Hub", 
+          "description": "left from origin", 
+          "timestamp": "2026-03-05T09:30:00Z", 
+          "remark_status_code": "200" 
+        },
+        { 
+          "status": "PICKUP DONE", 
+          "location": "Sender Warehouse", 
+          "description": "Package successfully collected", 
+          "timestamp": "2026-03-04T14:15:00Z", 
+          "remark_status_code": "100" 
+        }
     ]
   }
 }`;
@@ -415,15 +443,39 @@ const responseJsonTrackBulk = `{
   "data": [
     {
       "awb": "UEX48291039",
-      "status": { "current": "Pending", "booked_on": "..." },
-      "route": { "origin": "Mumbai", "destination": "Delhi" },
-      "history": [...]
+      "status": { "current": "IN-TRANSIT", "booked_on": "2026-03-04T10:00:00Z" },
+      "route": { "origin": "Mumbai, Maharashtra", "destination": "Delhi, Delhi" },
+      "parties": { "sender": "Sonu Kumar", "receiver": "Rahul Verma" },
+      "details": { "weight": 0.5, "type": "Standard Box" },
+      "financials": { "payment_mode": "Prepaid", "cod_to_collect": 0, "insured_value": 2500 },
+      "documents": { "label_url": "https://www.universalexpress.live/print/UEX48291039" },
+      "history": [
+        { 
+          "status": "IN-TRANSIT", 
+          "location": "Mumbai Hub", 
+          "description": "left from origin", 
+          "timestamp": "2026-03-05T09:30:00Z", 
+          "remark_status_code": "200" 
+        }
+      ]
     },
     {
       "awb": "UEX48291040",
-      "status": { "current": "Delivered", "booked_on": "..." },
-      "route": { "origin": "Mumbai", "destination": "Pune" },
-      "history": [...]
+      "status": { "current": "DELIVERED", "booked_on": "2026-03-02T11:00:00Z" },
+      "route": { "origin": "Mumbai, Maharashtra", "destination": "Pune, Maharashtra" },
+      "parties": { "sender": "Global Warehouse", "receiver": "Anjali Gupta" },
+      "details": { "weight": 0.5, "type": "Standard Box" },
+      "financials": { "payment_mode": "COD", "cod_to_collect": 3000, "insured_value": 2500 },
+      "documents": { "label_url": "https://www.universalexpress.live/print/UEX48291040" },
+      "history": [
+        { 
+          "status": "DELIVERED", 
+          "location": "Pune", 
+          "description": "Successfully handed to consignee", 
+          "timestamp": "2026-03-04T16:45:00Z", 
+          "remark_status_code": "400" 
+        }
+      ]
     }
   ]
 }`;
