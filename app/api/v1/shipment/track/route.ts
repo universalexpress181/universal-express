@@ -42,9 +42,10 @@ export async function GET(request: Request) {
     }
 
     // ---------------------------------------------------------
-    // 3. FETCH SHIPMENT DETAILS (reference_id REMOVED FROM SELECT)
+    // 3. FETCH SHIPMENT DETAILS (Robust Query)
     // ---------------------------------------------------------
-    const { data: shipment, error: shipError } = await supabaseAdmin
+    // Removed .single() to prevent raw 500 errors if data doesn't exist
+    const { data: shipmentData, error: shipError } = await supabaseAdmin
       .from('shipments')
       .select(`
         id, awb_code, current_status, created_at,
@@ -55,28 +56,37 @@ export async function GET(request: Request) {
         payment_status
       `)
       .eq('awb_code', awb)
-      .eq('user_id', userId) // 🔒 Security: Only the owner can track
-      .single();
+      .eq('user_id', userId); // 🔒 Security: Only the owner can track
 
-    if (shipError || !shipment) {
-      return NextResponse.json({ error: 'Shipment not found or access denied' }, { status: 404 });
+    // Check if there was an error OR if the array is empty
+    if (shipError || !shipmentData || shipmentData.length === 0) {
+      return NextResponse.json({ 
+        error: 'Shipment not found or access denied', 
+        // Uncomment the line below temporarily if you are still getting errors to see the exact DB issue
+        // details: shipError 
+      }, { status: 404 });
     }
+
+    // Safely grab the first result
+    const shipment = shipmentData[0];
 
     // ---------------------------------------------------------
     // 4. FETCH TRACKING HISTORY (Timeline)
     // ---------------------------------------------------------
+    // 🚀 Added remark_status_code (or master_status_code depending on your DB column name)
     const { data: history } = await supabaseAdmin
       .from('tracking_events')
-      .select('status, location, description, timestamp')
+      .select('status, location, description, timestamp, remark_status_code')
       .eq('shipment_id', shipment.id)
       .order('timestamp', { ascending: false });
 
     // ---------------------------------------------------------
     // 5. LOGGING & USAGE
     // ---------------------------------------------------------
-    supabaseAdmin.rpc('increment_key_usage', { key_id: keyData.id });
+    // Added 'await' to ensure these complete before the function returns
+    await supabaseAdmin.rpc('increment_key_usage', { key_id: keyData.id });
 
-    supabaseAdmin.from('api_logs').insert({
+    await supabaseAdmin.from('api_logs').insert({
         user_id: userId,
         endpoint: '/api/v1/shipment/track',
         method: 'GET',
@@ -117,7 +127,8 @@ export async function GET(request: Request) {
         documents: {
             label_url: `${process.env.NEXT_PUBLIC_SITE_URL}/print/${shipment.awb_code}`
         },
-        history: history || [] // Chronological timeline
+        // 🚀 History array will now automatically include remark_status_code
+        history: history || [] 
       }
     });
 
