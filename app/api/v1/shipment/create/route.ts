@@ -62,7 +62,10 @@ export async function POST(request: Request) {
         const mode = inputMode === 'COD' ? 'COD' : 'Prepaid';
         const declaredValue = parseFloat(item.declared_value) || 0;
         const codAmount = mode === 'COD' ? (parseFloat(item.cod_amount) || declaredValue) : 0;
-        const requestedService = mode === 'COD' ? 'COD' : (item.service_type || 'Prime');
+        
+        // 🚀 CHANGED LOGIC: Now strictly takes service_type from client JSON
+        // If the client doesn't pass anything, it defaults to 'Prime'
+        const requestedService = item.service_type || 'Prime';
 
         // --- C. ALLOCATE PARTNER AWB FROM BANK (BACKEND ONLY) ---
         const { data: partnerAwb, error: rpcError } = await supabaseAdmin.rpc('allocate_next_awb', { 
@@ -123,7 +126,7 @@ export async function POST(request: Request) {
             payment_mode: mode,
             cod_amount: codAmount,
             declared_value: declaredValue,
-            current_status: 'Order_placed'
+            current_status: 'order_placed'
         });
 
         // --- E. ADD TO RESPONSE (White-Labeled) ---
