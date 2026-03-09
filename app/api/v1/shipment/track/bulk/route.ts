@@ -47,17 +47,17 @@ export async function POST(request: Request) {
     }
 
     // ---------------------------------------------------------
-    // 3. FETCH SHIPMENTS (Bulk - reference_id REMOVED)
+    // 3. FETCH SHIPMENTS (Bulk)
     // ---------------------------------------------------------
     const { data: shipments, error: shipError } = await supabaseAdmin
       .from('shipments')
       .select(`
-        id, awb_code, current_status, created_at,
+        id, awb_code, current_status, remark_status_code, created_at,
         sender_name, sender_city, sender_state,
         receiver_name, receiver_city, receiver_state,
         weight, package_type,
         payment_mode, cod_amount, declared_value
-      `) // ❌ Removed payment_status here
+      `) 
       .eq('user_id', userId)
       .in('awb_code', awbs); // Fetch all matches in one query
 
@@ -69,17 +69,16 @@ export async function POST(request: Request) {
     // Extract IDs to fetch all related events at once
     const shipmentIds = shipments.map(s => s.id);
     
-    // 🚀 Added remark_status_code here
+    // 🚀 Aliased description to remark & added remark_status_code
     const { data: allEvents } = await supabaseAdmin
       .from('tracking_events')
-      .select('shipment_id, status, location, description, timestamp, remark_status_code')
+      .select('shipment_id, status, location, remark:description, timestamp, remark_status_code')
       .in('shipment_id', shipmentIds)
       .order('timestamp', { ascending: false });
 
     // ---------------------------------------------------------
     // 5. LOGGING & USAGE
     // ---------------------------------------------------------
-    // Added 'await' to ensure logs complete
     await supabaseAdmin.rpc('increment_key_usage', { key_id: keyData.id });
 
     await supabaseAdmin.from('api_logs').insert({
@@ -102,9 +101,10 @@ export async function POST(request: Request) {
         
         return {
             awb: shipment.awb_code,
-            // ❌ reference_id is strictly excluded from this white-labeled response
             status: {
-                current: shipment.current_status === 'created' ? 'Pending' : shipment.current_status,
+                // 🚀 Updated fallback and added remark_status_code
+                current: shipment.current_status === 'created' ? 'PENDING PICKUP' : shipment.current_status,
+                remark_status_code: shipment.remark_status_code || "99",
                 booked_on: shipment.created_at,
             },
             route: {
@@ -127,7 +127,7 @@ export async function POST(request: Request) {
             documents: {
                 label_url: `${process.env.NEXT_PUBLIC_SITE_URL}/print/${shipment.awb_code}`
             },
-            history: history // Clean timeline of events including remark_status_code
+            history: history // Clean timeline of events
         };
     });
 

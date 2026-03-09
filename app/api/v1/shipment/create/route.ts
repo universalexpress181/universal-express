@@ -63,11 +63,9 @@ export async function POST(request: Request) {
         const declaredValue = parseFloat(item.declared_value) || 0;
         const codAmount = mode === 'COD' ? (parseFloat(item.cod_amount) || declaredValue) : 0;
         
-        // 🚀 CHANGED LOGIC: Now strictly takes service_type from client JSON
-        // If the client doesn't pass anything, it defaults to 'Prime'
-        const requestedService = item.service_type || 'Prime';
-
         // --- C. ALLOCATE PARTNER AWB FROM BANK (BACKEND ONLY) ---
+        const requestedService = item.service_type || 'Prime';
+        
         const { data: partnerAwb, error: rpcError } = await supabaseAdmin.rpc('allocate_next_awb', { 
             requested_service: requestedService, 
             target_uex_awb: awb 
@@ -77,7 +75,6 @@ export async function POST(request: Request) {
             throw new Error(`Inventory stock empty for ${requestedService}. Please restock AWB Bank.`);
         }
 
-        // Determine partner name based on service (for internal admin use)
         const partnerName = requestedService === 'Ground Cargo' ? 'DPWORLD' : 'DTDC';
 
         // --- D. PREPARE DATABASE ROW ---
@@ -85,7 +82,7 @@ export async function POST(request: Request) {
             user_id: userId,
             awb_code: awb,
             
-            // 🎯 INTERNAL DATA (Strictly for Backend/Admin use)
+            // 🎯 INTERNAL DATA
             reference_id: partnerAwb, 
             partner_name: partnerName,
             service_type: requestedService,
@@ -126,17 +123,24 @@ export async function POST(request: Request) {
             payment_mode: mode,
             cod_amount: codAmount,
             declared_value: declaredValue,
-            current_status: 'created'
+            
+            // 🚀 AUTOMATICALLY INJECTED BACKEND STATUS
+            current_status: 'PENDING PICKUP',
+            remark_status_code: '99',
+            remark: 'Shipment created; waiting for courier collection'
         });
 
         // --- E. ADD TO RESPONSE (White-Labeled) ---
-        // ❌ reference_id and partner_name are NOT included here
         generatedResponseData.push({
             awb_code: awb,
             client_order_id: item.client_order_id || undefined,
             receiver_name: item.receiver_name,
             payment_mode: mode,
-            status: "created",
+            
+            // 🚀 RETURN THE OFFICIAL STATUS IN THE API RESPONSE
+            status: "PENDING PICKUP",
+            remark_status_code: "99",
+            
             label_url: `${process.env.NEXT_PUBLIC_SITE_URL}/print/${awb}`
         });
     }

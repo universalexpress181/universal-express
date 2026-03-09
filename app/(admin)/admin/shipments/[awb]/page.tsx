@@ -7,24 +7,56 @@ import { generateInvoice } from "@/lib/invoiceGenerator";
 import { 
   Truck, Save, Upload, ArrowLeft, Loader2, Trash2, 
   Image as ImageIcon, Clock, FileText, Printer, AlertTriangle, UserCheck, 
-  MapPin, Box, CreditCard, ChevronRight, Activity, CheckCircle2
+  MapPin, Box, CreditCard, ChevronRight, Activity, CheckCircle2, Link2
 } from "lucide-react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 
-// ✅ STATUS OPTIONS
+// ✅ MASTER STATUS OPTIONS 
 const STATUS_OPTIONS = [
-  { group: "Normal Flow", options: [
-    { value: "created", label: "Order Placed" },
-    { value: "manifested", label: "Picked Up (Manifested)" },
-    { value: "in_transit", label: "In Transit" },
-    { value: "out_for_delivery", label: "Out for Delivery" },
-    { value: "delivered", label: "Delivered Successfully" },
+  { group: "1. Pickup Phase", options: [
+    { code: "99", label: "PENDING PICKUP", remark: "Shipment created; waiting for courier collection" },
+    { code: "100", label: "PICKUP DONE", remark: "Package successfully collected from sender" },
+    { code: "900", label: "PICKUP CANCELLED", remark: "Order cancelled by client before pickup" },
+    { code: "900A", label: "PICKUP CANCELLED", remark: "Product description or count mismatch" },
+    { code: "900B", label: "PICKUP CANCELLED", remark: "Physical damage observed at pickup" },
   ]},
-  { group: "Exceptions & Failures", options: [
-    { value: "pickup_failed", label: "⚠️ Pickup Failed" },
-    { value: "delivery_failed", label: "⚠️ Delivery Failed" },
-    { value: "rto_initiated", label: "↩️ Return to Sender (RTO)" },
+  { group: "2. In-Transit Movement", options: [
+    { code: "102", label: "IN-TRANSIT", remark: "Processing at origin hub" },
+    { code: "105", label: "IN-TRANSIT", remark: "Ready to dispatch from origin" },
+    { code: "200", label: "IN-TRANSIT", remark: "Left from origin facility" },
+    { code: "201", label: "IN-TRANSIT", remark: "Standard movement between hubs" },
+    { code: "204", label: "IN-TRANSIT", remark: "Network delay / Operational backlog" },
+    { code: "211", label: "IN-TRANSIT", remark: "Misrouted; package rerouting in progress" },
+    { code: "301", label: "IN-TRANSIT", remark: "Arrived at destination branch" },
+    { code: "312", label: "IN-TRANSIT", remark: "Maximum transit attempts reached" },
+  ]},
+  { group: "3. Final Leg Delivery", options: [
+    { code: "305", label: "OUT FOR DELIVERY", remark: "Handed over to delivery agent for final leg" },
+    { code: "400", label: "DELIVERED", remark: "Shipment successfully received by consignee" },
+    { code: "951", label: "REATTEMPT", remark: "Automated trigger for a second delivery attempt" },
+    { code: "1001", label: "UNATTEMPTED", remark: "Agent could not reach address (time constraint)" },
+  ]},
+  { group: "4. Exceptions (Undelivered)", options: [
+    { code: "500", label: "UNDELIVERED", remark: "Consignee refused to accept package" },
+    { code: "501", label: "UNDELIVERED", remark: "Incomplete or incorrect address" },
+    { code: "502", label: "UNDELIVERED", remark: "ODA (Out of Delivery Area) location" },
+    { code: "503", label: "UNDELIVERED", remark: "Consignee has shifted address" },
+    { code: "507", label: "UNDELIVERED", remark: "Consignee not ready with COD amount" },
+    { code: "508", label: "UNDELIVERED", remark: "Office or residence closed" },
+    { code: "515", label: "UNDELIVERED", remark: "Consignee not reachable on phone" },
+    { code: "517", label: "UNDELIVERED", remark: "Misrouted during local delivery leg" },
+    { code: "520", label: "UNDELIVERED", remark: "Package taken by consignee without payment" },
+    { code: "526", label: "UNDELIVERED", remark: "OTP for delivery not shared by customer" },
+  ]},
+  { group: "5. Returns & Terminals (RTO/Lost)", options: [
+    { code: "600", label: "RTO INITIATED", remark: "Return process started back to sender" },
+    { code: "601", label: "RTO IN-TRANSIT", remark: "Parcel moving back toward origin" },
+    { code: "620", label: "RTO OUT FOR DELIVERY", remark: "Agent delivering returned parcel to vendor" },
+    { code: "401", label: "RTO DELIVERED", remark: "Return successfully received by original sender" },
+    { code: "621", label: "RTO UNDELIVERED", remark: "Vendor refused to accept return" },
+    { code: "901", label: "LOST", remark: "Shipment confirmed lost in network" },
+    { code: "902", label: "SHIPMENT DAMAGE", remark: "Parcel damaged beyond repair in transit" },
   ]}
 ];
 
@@ -39,7 +71,7 @@ const itemVariants = {
   visible: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 200, damping: 20 } }
 };
 
-// 💎 FIXED INPUT STYLE (Titanium & Obsidian)
+// 💎 FIXED INPUT STYLE 
 const inputClass = `
   w-full bg-gray-50 dark:bg-[#111827] 
   border border-gray-200 dark:border-gray-800 
@@ -57,11 +89,13 @@ export default function AdminShipmentDetail() {
   const [podImages, setPodImages] = useState<any[]>([]); 
   
   // Form State
+  const [selectedCode, setSelectedCode] = useState(""); 
   const [status, setStatus] = useState("");
   const [location, setLocation] = useState("Warehouse, Mumbai");
-  const [reason, setReason] = useState("");
+  const [remark, setRemark] = useState(""); 
   const [customTime, setCustomTime] = useState(""); 
-  const [referenceId, setReferenceId] = useState(""); // 🆕 Shipment Reference State
+  const [referenceId, setReferenceId] = useState(""); 
+  const [podUrl, setPodUrl] = useState(""); 
   
   // Staff Assignment
   const [staffList, setStaffList] = useState<any[]>([]);
@@ -72,9 +106,11 @@ export default function AdminShipmentDetail() {
 
   // 🎨 COLOR LOGIC
   const getStatusColor = (st: string) => {
-    if (['pickup_failed', 'delivery_failed', 'rto_initiated'].includes(st)) 
+    if (!st) return 'bg-gray-100 text-gray-500';
+    const s = st.toUpperCase();
+    if (s.includes('UNDELIVERED') || s.includes('CANCELLED') || s.includes('RTO') || s.includes('FAILED') || s.includes('LOST')) 
         return 'bg-red-50 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-900/50';
-    if (st === 'delivered') 
+    if (s.includes('DELIVERED') && !s.includes('RTO')) 
         return 'bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-900/20 dark:text-teal-400 dark:border-teal-900/50';
     return 'bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-cyan-900/20 dark:text-cyan-400 dark:border-cyan-900/50';
   };
@@ -91,7 +127,6 @@ export default function AdminShipmentDetail() {
     fetchStaff(); 
     setCustomTime(getLocalNow()); 
 
-    // ✨ REAL-TIME LISTENER
     const channel = supabase
       .channel('realtime_shipment_detail')
       .on(
@@ -100,7 +135,12 @@ export default function AdminShipmentDetail() {
         (payload) => {
           setShipment(payload.new);
           setStatus(payload.new.current_status);
-          setReferenceId(payload.new.reference_id || ""); // Sync reference realtime
+          
+          // Real-time dropdown sync
+          if (payload.new.remark_status_code) setSelectedCode(payload.new.remark_status_code);
+          else if (payload.new.master_status_code) setSelectedCode(payload.new.master_status_code);
+          
+          setReferenceId(payload.new.reference_id || ""); 
           if (payload.new.delivery_boy_id) setAssignedStaff(payload.new.delivery_boy_id);
         }
       )
@@ -110,17 +150,6 @@ export default function AdminShipmentDetail() {
       supabase.removeChannel(channel);
     };
   }, [awb]);
-
-  // ⚡ AUTO-FILL REASON FOR RTO
-  useEffect(() => {
-    if (status === "rto_initiated") {
-        setReason("Maximum delivery attempts exceeded");
-    } else if (['pickup_failed', 'delivery_failed'].includes(status)) {
-        if (reason === "Maximum delivery attempts exceeded") setReason(""); 
-    } else {
-        setReason("");
-    }
-  }, [status]);
 
   const fetchStaff = async () => {
     const { data } = await supabase.from('staff').select('*').eq('status', 'Active');
@@ -136,8 +165,25 @@ export default function AdminShipmentDetail() {
       setShipment(shipData);
       setStatus(shipData.current_status);
       setAssignedStaff(shipData.delivery_boy_id || ""); 
-      setReferenceId(shipData.reference_id || ""); // 🆕 Load reference from DB
-      if (shipData.failure_reason) setReason(shipData.failure_reason);
+      setReferenceId(shipData.reference_id || ""); 
+      
+      // 🚀 BULLETPROOF INITIALIZATION: Ensure dropdown always matches DB state perfectly
+      let codeToSet = "99"; // Fallback
+      if (shipData.remark_status_code) { 
+          codeToSet = shipData.remark_status_code;
+      } else if (shipData.master_status_code) {
+          codeToSet = shipData.master_status_code;
+      } else if (shipData.current_status) {
+          const cStatus = shipData.current_status.toUpperCase();
+          const match = STATUS_OPTIONS.flatMap(g => g.options).find(o => o.label === cStatus);
+          if (match) codeToSet = match.code;
+          else if (cStatus === 'CREATED' || cStatus === 'ORDER_PLACED') codeToSet = "99";
+          else if (cStatus === 'IN_TRANSIT') codeToSet = "102";
+          else if (cStatus === 'DELIVERED') codeToSet = "400";
+      }
+      setSelectedCode(codeToSet);
+
+      if (shipData.remark) setRemark(shipData.remark); 
 
       const { data: images } = await supabase.from('pod_images').select('*').eq('shipment_id', shipData.id).order('uploaded_at', { ascending: false });
       setPodImages(images || []);
@@ -146,17 +192,21 @@ export default function AdminShipmentDetail() {
   };
 
   const handleUpdate = async () => {
-    if (!shipment?.id) return;
+    if (!shipment?.id || !selectedCode) {
+        alert("Please select a valid Status Code.");
+        return;
+    }
 
-    const isFailure = ['pickup_failed', 'delivery_failed', 'rto_initiated'].includes(status);
-    const failureReasonToSave = isFailure ? reason : null;
+    const currentStatusObj = STATUS_OPTIONS.flatMap(g => g.options).find(o => o.code === selectedCode);
+    if (!currentStatusObj) return;
 
     const { error: updateError } = await supabase
       .from('shipments')
       .update({ 
-          current_status: status,
-          failure_reason: failureReasonToSave,
-          reference_id: referenceId // 🆕 Save Reference ID to DB
+          current_status: currentStatusObj.label, 
+          remark_status_code: selectedCode,       
+          remark: remark, 
+          reference_id: referenceId 
       })
       .eq('id', shipment.id);
 
@@ -165,20 +215,16 @@ export default function AdminShipmentDetail() {
       return;
     }
 
-    let finalLocation = location;
-    if (isFailure && reason) {
-        finalLocation = `${location} [Reason: ${reason}]`;
-    }
-
     await supabase.from('tracking_events').insert({
       shipment_id: shipment.id,
-      status: status,
-      location: finalLocation,
+      status: currentStatusObj.label,           
+      remark_status_code: selectedCode,         
+      description: remark, 
+      location: location,
       timestamp: new Date(customTime).toISOString() 
     });
 
-    if (!isFailure) setReason(""); 
-    alert("✅ Status & Reference Updated Successfully!");
+    alert("✅ Status Code & Remark Updated Successfully!");
   };
 
   const handleAssignStaff = async () => {
@@ -190,9 +236,29 @@ export default function AdminShipmentDetail() {
         .eq('id', shipment.id);
     
     if (error) alert("Error: " + error.message);
-    else {
-        alert("✅ Driver Assigned Successfully!");
+    else alert("✅ Driver Assigned Successfully!");
+  };
+
+  const handleUrlUpload = async () => {
+    if (!podUrl.trim() || !shipment?.id) return;
+    
+    setUploading(true);
+    const { error } = await supabase.from('pod_images').insert({
+        shipment_id: shipment.id,
+        image_url: podUrl.trim()
+    });
+
+    if (error) {
+        alert("❌ Failed to add URL: " + error.message);
+        setUploading(false);
+        return;
     }
+
+    await supabase.from('shipments').update({ current_status: 'DELIVERED', remark_status_code: '400', remark: 'Shipment successfully received by consignee' }).eq('id', shipment.id);
+    await loadData();
+    setPodUrl("");
+    setUploading(false);
+    alert("✅ URL Added & Marked as Delivered!");
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -214,16 +280,20 @@ export default function AdminShipmentDetail() {
       await supabase.from('pod_images').insert({ shipment_id: shipment.id, image_url: publicUrl });
     }
 
-    await supabase.from('shipments').update({ current_status: 'delivered' }).eq('id', shipment.id);
+    await supabase.from('shipments').update({ current_status: 'DELIVERED', remark_status_code: '400', remark: 'Shipment successfully received by consignee' }).eq('id', shipment.id); 
     await loadData();
     setUploading(false);
-    alert("✅ Images Uploaded!");
+    alert("✅ Images Uploaded & Marked as Delivered!");
   };
 
   const handleDeleteImage = async (imageId: string, imageUrl: string) => {
     if(!confirm("Delete this image?")) return;
-    const fileName = imageUrl.split('/').pop();
-    if (fileName) await supabase.storage.from('evidence').remove([fileName]);
+    
+    if (imageUrl.includes('supabase.co')) {
+        const fileName = imageUrl.split('/').pop();
+        if (fileName) await supabase.storage.from('evidence').remove([fileName]);
+    }
+    
     await supabase.from('pod_images').delete().eq('id', imageId);
     setPodImages(podImages.filter(img => img.id !== imageId));
   };
@@ -236,8 +306,8 @@ export default function AdminShipmentDetail() {
   
   if (!shipment) return <div className="p-10 text-gray-500">Shipment not found</div>;
 
-  const isFailureStatus = ['pickup_failed', 'delivery_failed', 'rto_initiated'].includes(status);
-  const isDelivered = shipment.current_status === 'delivered';
+  const isFailureStatus = status && ['UNDELIVERED', 'CANCELLED', 'RTO', 'LOST', 'DAMAGE'].some(word => status.toUpperCase().includes(word));
+  const isDelivered = shipment.current_status?.toUpperCase() === 'DELIVERED';
 
   return (
     <motion.div 
@@ -266,7 +336,7 @@ export default function AdminShipmentDetail() {
                         <h1 className="text-3xl md:text-5xl font-black text-gray-900 dark:text-white tracking-tighter font-mono">{shipment.awb_code}</h1>
                     </div>
                     <span className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest border backdrop-blur-md shadow-sm ${getStatusColor(shipment.current_status)}`}>
-                        {shipment.current_status.replace(/_/g, ' ')}
+                        {shipment.current_status?.replace(/_/g, ' ') || 'PENDING'} {shipment.remark_status_code ? `(${shipment.remark_status_code})` : ''} 
                     </span>
                 </div>
 
@@ -364,41 +434,58 @@ export default function AdminShipmentDetail() {
 
                 <h3 className={`font-bold mb-6 flex items-center gap-2 text-sm uppercase tracking-widest ${isFailureStatus ? 'text-red-600 dark:text-red-400' : 'text-gray-900 dark:text-white'}`}>
                     {isFailureStatus ? <AlertTriangle size={18}/> : <Activity size={18}/>} 
-                    Update Status
+                    Update Status Code
                 </h3>
                 
                 <div className="space-y-5 relative z-10">
                     <div>
-                        <label className="text-[10px] text-gray-500 font-bold uppercase mb-1.5 block">New Status</label>
+                        <label className="text-[10px] text-gray-500 font-bold uppercase mb-1.5 block">Shipment Status</label>
                         <select 
-                            value={status} 
-                            onChange={(e) => setStatus(e.target.value)}
+                            value={selectedCode} 
+                            onChange={(e) => {
+                                const newCode = e.target.value;
+                                setSelectedCode(newCode);
+                                // 🚀 Only auto-fills remark when manually changed in UI
+                                const match = STATUS_OPTIONS.flatMap(g => g.options).find(o => o.code === newCode);
+                                if (match) {
+                                    setRemark(match.remark);
+                                    setStatus(match.label);
+                                }
+                            }}
                             className={inputClass}
                         >
+                            <option value="" disabled>Select a Master Code...</option>
                             {STATUS_OPTIONS.map((group, idx) => (
                                 <optgroup key={idx} label={group.group}>
-                                    {group.options.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                                    {group.options.map(opt => (
+                                        <option key={opt.code} value={opt.code}>
+                                            {opt.label} ({opt.code})
+                                        </option>
+                                    ))}
                                 </optgroup>
                             ))}
                         </select>
                     </div>
 
                     <AnimatePresence>
-                        {isFailureStatus && (
+                        {selectedCode && (
                             <motion.div 
                                 initial={{ opacity: 0, height: 0 }} 
                                 animate={{ opacity: 1, height: 'auto' }}
-                                exit={{ opacity: 0, height: 0 }}
                                 className="overflow-hidden"
                             >
-                                <label className="text-[10px] text-red-500 font-bold uppercase mb-1.5 block">
-                                    {status === 'rto_initiated' ? 'RTO Reason' : 'Failure Reason'}
+                                <label className={`text-[10px] font-bold uppercase mb-1.5 block ${isFailureStatus ? 'text-red-500' : 'text-indigo-500 dark:text-cyan-400'}`}>
+                                    {isFailureStatus ? 'Failure Remark (Editable)' : 'Status Remark (Editable)'}
                                 </label>
-                                <input 
-                                    value={reason}
-                                    onChange={(e) => setReason(e.target.value)}
-                                    placeholder="e.g. Door Locked, Customer Unreachable..."
-                                    className="w-full bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-900/60 p-3.5 rounded-xl text-red-900 dark:text-white outline-none focus:border-red-500 placeholder-red-400 dark:placeholder-red-800/50 text-sm"
+                                <textarea 
+                                    rows={2}
+                                    value={remark}
+                                    onChange={(e) => setRemark(e.target.value)}
+                                    className={`w-full p-3.5 rounded-xl text-sm outline-none resize-none ${
+                                        isFailureStatus 
+                                        ? 'bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-900/60 text-red-900 dark:text-white focus:border-red-500'
+                                        : 'bg-indigo-50 dark:bg-cyan-900/10 border border-indigo-200 dark:border-cyan-900/40 text-indigo-900 dark:text-cyan-100 focus:border-indigo-500 dark:focus:border-cyan-500'
+                                    }`}
                                 />
                             </motion.div>
                         )}
@@ -454,7 +541,7 @@ export default function AdminShipmentDetail() {
                                 : 'bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 shadow-indigo-500/20'
                         }`}
                     >
-                        <Save size={18} /> {isFailureStatus ? 'Report Failure' : 'Save Update'}
+                        <Save size={18} /> Sync Code & Remark
                     </motion.button>
                 </div>
             </motion.div>
@@ -494,12 +581,43 @@ export default function AdminShipmentDetail() {
                     <ChevronRight size={14} className="text-gray-400 group-hover:text-gray-600 dark:group-hover:text-white"/>
                 </button>
                 
-                <div className="border-t border-gray-100 dark:border-gray-800 my-4 pt-4">
+                <div className="border-t border-gray-100 dark:border-gray-800 my-4 pt-4 space-y-4">
+                    {/* 🚀 URL UPLOAD SECTION */}
+                    <div>
+                        <label className="text-[10px] text-gray-500 font-bold uppercase mb-1.5 block">Paste Image URL</label>
+                        <div className="flex gap-2">
+                            <div className="relative flex-1">
+                                <Link2 size={16} className="absolute left-3.5 top-3.5 text-gray-400"/>
+                                <input 
+                                    type="url"
+                                    placeholder="https://..."
+                                    value={podUrl}
+                                    onChange={(e) => setPodUrl(e.target.value)}
+                                    className={`${inputClass} pl-10`}
+                                />
+                            </div>
+                            <button 
+                                onClick={handleUrlUpload}
+                                disabled={uploading || !podUrl.trim()}
+                                className="bg-gray-100 hover:bg-indigo-50 dark:bg-[#111827] dark:hover:bg-indigo-900/30 text-gray-700 hover:text-indigo-700 dark:text-gray-300 dark:hover:text-indigo-400 px-4 rounded-xl font-bold transition-all text-sm border border-gray-200 dark:border-gray-800 disabled:opacity-50"
+                            >
+                                Add
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="relative flex items-center py-2">
+                        <div className="flex-grow border-t border-gray-200 dark:border-gray-800"></div>
+                        <span className="flex-shrink-0 mx-4 text-[10px] font-bold text-gray-400 tracking-widest uppercase">OR</span>
+                        <div className="flex-grow border-t border-gray-200 dark:border-gray-800"></div>
+                    </div>
+
+                    {/* 🚀 FILE UPLOAD SECTION */}
                     <label className="w-full flex flex-col items-center justify-center p-4 border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-xl cursor-pointer hover:border-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/10 transition-all group">
                         <Upload size={24} className="text-gray-400 group-hover:text-indigo-500 mb-2 transition-colors"/>
-                        <span className="text-xs font-bold text-gray-500 group-hover:text-gray-700 dark:group-hover:text-gray-200">Upload Evidence</span>
+                        <span className="text-xs font-bold text-gray-500 group-hover:text-gray-700 dark:group-hover:text-gray-200">Upload Evidence File</span>
                         <input type="file" accept="image/*" multiple onChange={handleFileUpload} className="hidden" />
-                        {uploading && <p className="text-[10px] text-indigo-500 mt-1 animate-pulse font-bold">Uploading...</p>}
+                        {uploading && <p className="text-[10px] text-indigo-500 mt-1 animate-pulse font-bold">Processing...</p>}
                     </label>
                 </div>
             </motion.div>
