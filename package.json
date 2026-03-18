@@ -9,10 +9,10 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@sparticuz/chromium": "^143.0.4",
     "@supabase/ssr": "^0.8.0",
     "@supabase/supabase-js": "^2.90.0",
     "autoprefixer": "^10.4.23",
-    "chrome-aws-lambda": "^10.1.0",
     "clsx": "^2.1.1",
     "framer-motion": "^12.28.2",
     "html2canvas": "^1.4.1",
