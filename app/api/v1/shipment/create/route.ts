@@ -115,17 +115,19 @@ export async function POST(request: Request) {
         });
 
         const labelUrls = [];
+
+        // ✅ UPDATED TO PDF API
         if (packageCount === 1) {
-            labelUrls.push(`${process.env.NEXT_PUBLIC_SITE_URL}/print/${awb}`);
+            labelUrls.push(`${process.env.NEXT_PUBLIC_SITE_URL}/api/label?awb=${awb}`);
         } else {
             for (let p = 1; p <= packageCount; p++) {
-                labelUrls.push(`${process.env.NEXT_PUBLIC_SITE_URL}/print/${awb}?piece=${p}&total=${packageCount}`);
+                labelUrls.push(`${process.env.NEXT_PUBLIC_SITE_URL}/api/label?awb=${awb}&piece=${p}&total=${packageCount}`);
             }
         }
 
-        // 🚀 NEW: Generate a Master Link if there are multiple boxes
+        // ✅ UPDATED MASTER LINK
         const masterLabelUrl = packageCount > 1 
-            ? `${process.env.NEXT_PUBLIC_SITE_URL}/print/${awb}?all=true` 
+            ? `${process.env.NEXT_PUBLIC_SITE_URL}/api/label?awb=${awb}&all=true` 
             : labelUrls[0];
 
         generatedResponseData.push({
@@ -136,7 +138,7 @@ export async function POST(request: Request) {
             status: "PENDING PICKUP",
             remark_status_code: "99",
             total_pieces: packageCount,
-            master_label_url: masterLabelUrl, // 🚀 Give them the 1-click print-all link
+            master_label_url: masterLabelUrl,
             labels: labelUrls 
         });
     }
