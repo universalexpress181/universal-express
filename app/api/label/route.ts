@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import puppeteer from "puppeteer-core";
-import chromium from "chrome-aws-lambda";
+import chromium from "@sparticuz/chromium";
 import { createClient } from "@supabase/supabase-js";
 
 const supabase = createClient(
@@ -142,10 +142,10 @@ export async function GET(req: Request) {
 
     // ✅ PRODUCTION SAFE LAUNCH
     const browser = await puppeteer.launch({
-      args: chromium.args,
-      executablePath: await chromium.executablePath,
-      headless: true,
-    });
+  args: chromium.args,
+  executablePath: await chromium.executablePath(),
+  headless: true,
+});
 
     const page = await browser.newPage();
     await page.setContent(html, { waitUntil: "networkidle0" });
