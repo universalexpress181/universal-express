@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { 
   Key, Copy, RefreshCw, Check, Code, Server, 
   Eye, EyeOff, Box, Layers, Terminal, FileJson, 
-  BookOpen, Search, Globe, Info
+  BookOpen, Search, Globe, Info, Link2, ImageIcon
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -20,10 +20,19 @@ const itemVariants = {
   visible: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 200, damping: 20 } }
 };
 
+const inputClass = `
+  w-full bg-gray-50 dark:bg-[#111827] 
+  border border-gray-200 dark:border-gray-800 
+  text-gray-900 dark:text-gray-100 
+  rounded-xl p-3.5 text-sm outline-none 
+  focus:ring-2 focus:ring-indigo-500/30 dark:focus:ring-cyan-500/30 
+  focus:border-indigo-500 dark:focus:border-cyan-500
+  transition-all placeholder-gray-400 dark:placeholder-gray-600
+`;
+
 export default function DeveloperSettings() {
   const [loading, setLoading] = useState(true);
   const [apiKey, setApiKey] = useState("");
-  // 🌐 PRODUCTION BASE URL
   const baseUrl = "https://www.universalexpress.live";
   
   const [showKey, setShowKey] = useState(false);
@@ -101,7 +110,6 @@ export default function DeveloperSettings() {
     }
   };
 
-  // ✅ DEFINED ONLY ONCE: REACTIVE RESPONSE PREVIEW
   const getCurrentResponse = () => {
     if (apiOperation === 'create') {
         return reqType === 'single' ? responseJsonCreateSingle : responseJsonCreateBulk;
@@ -121,7 +129,7 @@ export default function DeveloperSettings() {
                 <div className="p-2 md:p-2.5 bg-gradient-to-br from-violet-500 to-fuchsia-600 rounded-xl text-white shadow-lg"><Code size={24}/></div>
                 Developer Portal
             </h1>
-            <p className="text-slate-500 dark:text-slate-400 text-xs md:text-sm mt-2 font-medium ml-1">Complete REST API documentation.</p>
+            <p className="text-slate-500 dark:text-slate-400 text-xs md:text-sm mt-2 font-medium ml-1">Production API Documentation</p>
         </div>
         <div className="flex items-center gap-2 px-4 py-2 bg-emerald-50 dark:bg-emerald-900/10 rounded-xl text-xs font-bold text-emerald-600 border border-emerald-200">
             <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div> API System Live
@@ -134,7 +142,7 @@ export default function DeveloperSettings() {
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
             <div>
                 <h3 className="text-base md:text-lg font-bold flex items-center gap-2 dark:text-white"><Key size={20} className="text-orange-500"/> Authentication</h3>
-                <p className="text-xs md:text-sm text-slate-500 mt-1">Pass this in the <code className="bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded text-orange-600 font-mono">x-api-key</code> header.</p>
+                <p className="text-xs md:text-sm text-slate-500 mt-1">Include <code className="bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded text-orange-600 font-mono">x-api-key</code> in your headers.</p>
             </div>
             <button onClick={generateNewKey} disabled={regenerating} className="w-full md:w-auto text-xs font-bold text-red-500 bg-red-50 dark:bg-red-900/10 px-4 py-2.5 rounded-xl border border-red-200 flex items-center justify-center gap-2 hover:bg-red-100 transition-all">
                 <RefreshCw size={14} className={regenerating ? "animate-spin" : ""}/> Regenerate Key
@@ -167,9 +175,9 @@ export default function DeveloperSettings() {
 
                     {apiOperation === 'create' && (
                         <div className="pt-2 animate-in slide-in-from-top-2 duration-300">
-                            <label className="text-[10px] font-bold text-slate-400 uppercase block mb-2">Request Mode</label>
+                            <label className="text-[10px] font-bold text-slate-400 uppercase block mb-2">Request Format</label>
                             <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-lg">
-                                <button onClick={()=>setReqType('single')} className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${reqType==='single' ? 'bg-white dark:bg-slate-700 shadow text-blue-500' : 'text-slate-500'}`}>Single</button>
+                                <button onClick={()=>setReqType('single')} className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${reqType==='single' ? 'bg-white dark:bg-slate-700 shadow text-blue-500' : 'text-slate-500'}`}>Professional (Nested)</button>
                                 <button onClick={()=>setReqType('bulk')} className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${reqType==='bulk' ? 'bg-white dark:bg-slate-700 shadow text-blue-500' : 'text-slate-500'}`}>Bulk Array</button>
                             </div>
                         </div>
@@ -189,7 +197,7 @@ export default function DeveloperSettings() {
 
             {/* REST ENDPOINTS WITH SUBTEXT */}
             <div className="bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 p-5 rounded-2xl shadow-sm">
-                <h4 className="font-bold text-sm mb-3 flex items-center gap-2 dark:text-white"><Server size={16} className="text-violet-500"/> Available Endpoints</h4>
+                <h4 className="font-bold text-sm mb-3 flex items-center gap-2 dark:text-white"><Server size={16} className="text-violet-500"/> Active Endpoints</h4>
                 <div className="space-y-4 font-mono text-[11px]">
                     <div className="text-xs group">
                         <div className="flex items-center gap-2 mb-1">
@@ -197,7 +205,7 @@ export default function DeveloperSettings() {
                             <span className="text-slate-600 dark:text-slate-300">/api/v1/shipment/create</span>
                         </div>
                         <p className="text-slate-500 dark:text-slate-400 font-sans mt-1 leading-relaxed">
-                            Generate new shipping labels and book pick-ups. Returns internal AWB and printable PDF link.
+                            Supports multi-piece shipments via <code className="text-violet-500">package_count</code>. Returns a Master Label URL.
                         </p>
                     </div>
                     <div className="h-px bg-slate-200 dark:bg-slate-800"></div>
@@ -207,7 +215,7 @@ export default function DeveloperSettings() {
                             <span className="text-slate-600 dark:text-slate-300">/api/v1/shipment/track</span>
                         </div>
                         <p className="text-slate-500 dark:text-slate-400 font-sans mt-1 leading-relaxed">
-                            Retrieve real-time status updates and complete chronological tracking history for a single AWB.
+                           Now includes <code className="text-blue-500">pod_urls</code> in the response automatically once delivered.
                         </p>
                     </div>
                     <div className="h-px bg-slate-200 dark:bg-slate-800"></div>
@@ -217,7 +225,7 @@ export default function DeveloperSettings() {
                             <span className="text-slate-600 dark:text-slate-300">/api/v1/shipment/track/bulk</span>
                         </div>
                         <p className="text-slate-500 dark:text-slate-400 font-sans mt-1 leading-relaxed">
-                            Optimized batch tracking for up to 100 shipments. Ideal for dashboard overview syncs.
+                            Efficient batch tracking using the <code className="text-purple-500">100 awbs</code> array parameter.
                         </p>
                     </div>
                 </div>
@@ -229,9 +237,9 @@ export default function DeveloperSettings() {
             <div className="bg-slate-900 rounded-3xl border border-slate-800 shadow-2xl flex flex-col h-full min-h-[600px] overflow-hidden">
                 <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-950/50">
                     <div className="flex gap-4">
-                        <TabBtn active={viewMode==='request'} onClick={()=>setViewMode('request')} label="Request Body"/>
-                        <TabBtn active={viewMode==='response'} onClick={()=>setViewMode('response')} label="Response JSON"/>
-                        <TabBtn active={viewMode==='schema'} onClick={()=>setViewMode('schema')} label="Field Reference"/>
+                        <TabBtn active={viewMode==='request'} onClick={()=>setViewMode('request')} label="Payload"/>
+                        <TabBtn active={viewMode==='response'} onClick={()=>setViewMode('response')} label="Response"/>
+                        <TabBtn active={viewMode==='schema'} onClick={()=>setViewMode('schema')} label="Reference"/>
                     </div>
                     <button onClick={()=>copyToClipboard(viewMode==='request' ? getCodeSnippet() : getCurrentResponse(), false)} className="text-slate-400 hover:text-white flex items-center gap-2 text-xs font-bold transition-all">
                         {copiedSnippet ? <Check size={14} className="text-green-500"/> : <Copy size={14}/>} {copiedSnippet ? "Copied" : "Copy"}
@@ -245,51 +253,26 @@ export default function DeveloperSettings() {
                         <div className="space-y-8 min-w-[600px] pb-10 animate-in fade-in">
                             {apiOperation === 'create' ? (
                                 <>
-                                    <SchemaSection title="1. Identity & Corporate" fields={[
-                                        { field: "client_order_id", type: "string", req: "No", desc: "Your internal order number." },
-                                        { field: "service_type", type: "string", req: "No", desc: "e.g., 'Prime' or 'Air/Ground Express'. Defaults to Prime." },
-                                        { field: "ship_from_company", type: "string", req: "No", desc: "Pickup business name." },
-                                        { field: "ship_to_company", type: "string", req: "No", desc: "Receiver business name." },
+                                    <SchemaSection title="Logistics & Packaging" fields={[
+                                        { field: "identical_package_count", type: "int", req: "No", desc: "Total boxes for this AWB. Default: 1." },
+                                        { field: "service_type", type: "string", req: "No", desc: "Prime, Ground Cargo, or Air Express." },
+                                        { field: "weight", type: "number", req: "Yes", desc: "Weight in KG per package." },
                                     ]}/>
-                                    <SchemaSection title="2. Address Mapping" fields={[
-                                        { field: "sender_name", type: "string", req: "Yes", desc: "Full name of the shipper." },
-                                        { field: "sender_phone", type: "string", req: "Yes", desc: "10-digit mobile number." },
-                                        { field: "sender_address", type: "string", req: "Yes", desc: "Full pickup street address." },
-                                        { field: "sender_pincode", type: "string", req: "Yes", desc: "6-digit pickup ZIP code." },
-                                        { field: "receiver_name", type: "string", req: "Yes", desc: "Customer full name." },
-                                        { field: "receiver_phone", type: "string", req: "Yes", desc: "10-digit delivery contact." },
-                                        { field: "receiver_address", type: "string", req: "Yes", desc: "Full delivery street address." },
-                                        { field: "receiver_pincode", type: "string", req: "Yes", desc: "6-digit delivery ZIP code." },
-                                    ]}/>
-                                    <SchemaSection title="3. Financials & Logistics" fields={[
-                                        { field: "payment_mode", type: "enum", req: "Yes", desc: "'Prepaid' or 'COD'." },
-                                        { field: "cod_amount", type: "number", req: "Cond.", desc: "Required only if payment_mode is COD." },
-                                        { field: "declared_value", type: "number", req: "Yes", desc: "Product value for insurance." },
-                                        { field: "weight", type: "number", req: "Yes", desc: "Weight in KG (minimum 0.5)." },
-                                    ]}/>
-                                    <SchemaSection title="4. Dimensions (CM)" fields={[
-                                        { field: "length", type: "number", req: "No", desc: "Default: 10 CM." },
-                                        { field: "width", type: "number", req: "No", desc: "Default: 10 CM." },
-                                        { field: "height", type: "number", req: "No", desc: "Default: 10 CM." },
-                                        { field: "identical_package_count", type: "int", req: "No", desc: "Total number of boxes." },
+                                    <SchemaSection title="Addressing (Professional Schema)" fields={[
+                                        { field: "origin.address", type: "string", req: "Yes", desc: "Full pickup address (supports multiple lines)." },
+                                        { field: "destination.pincode", type: "string", req: "Yes", desc: "6-digit delivery ZIP code." },
                                     ]}/>
                                 </>
                             ) : (
                                 <>
-                                  <SchemaSection title="Tracking Schema" fields={[
-                                      { field: "awb", type: "string", req: "Yes", desc: "Internal code (UEX...)." },
-                                      { field: "status.current", type: "string", req: "Yes", desc: "Latest human-readable status." },
-                                      { field: "history[]", type: "array", req: "Yes", desc: "Chronological event timeline array." },
-                                      { field: "history[].remark_status_code", type: "string", req: "Yes", desc: "Master numeric status code for logic mapping." },
-                                  ]}/>
-                                  <SchemaSection title="Master Status Codes (Reference)" fields={[
-                                      { field: "200 - 312", type: "code", req: "-", desc: "IN-TRANSIT (Moving between hubs / Out for delivery)" },
-                                      { field: "400", type: "code", req: "-", desc: "DELIVERED (Successfully handed to consignee)" },
-                                      { field: "500 - 528", type: "code", req: "-", desc: "UNDELIVERED (Refused, Closed, Address Issue, etc.)" },
-                                      { field: "600 - 644", type: "code", req: "-", desc: "RTO (Return to Origin initiated or delivered)" },
-                                      { field: "900 - 900B", type: "code", req: "-", desc: "PICKUP CANCELLED (By client or due to damage)" },
-                                      { field: "901 / 902", type: "code", req: "-", desc: "LOST / DAMAGED (Shipment lost or unusable)" },
-                                  ]}/>
+                                    <SchemaSection title="Tracking Documents" fields={[
+                                        { field: "pod_urls[]", type: "array", req: "Cond.", desc: "Array of Proof of Delivery links (Delivered only)." },
+                                        { field: "status.current", type: "string", req: "Yes", desc: "Latest normalized status text." },
+                                    ]}/>
+                                    <SchemaSection title="Historical timeline" fields={[
+                                        { field: "history[].location", type: "string", req: "No", desc: "City/Hub where event occurred." },
+                                        { field: "history[].remark_status_code", type: "string", req: "Yes", desc: "Global numeric status code." },
+                                    ]}/>
                                 </>
                             )}
                         </div>
@@ -340,36 +323,42 @@ function SchemaSection({ title, fields }: { title: string, fields: any[] }) {
     );
 }
 
-// 📦 API DUMMY DATA
+// 📦 API DUMMY DATA (Professional Nested Payload)
 const singleOrderObj = {
-  client_order_id: "ORD-99881",
-  service_type: "Air/Ground Express",
-  ship_from_company: "Global Warehouse",
-  sender_name: "Sonu Kumar",
-  sender_phone: "9876543210",
-  sender_address: "B-102, Industrial Estate",
-  sender_city: "Mumbai",
-  sender_state: "Maharashtra",
-  sender_pincode: "400001",
-  ship_to_company: "Acme Corp Ltd",
-  receiver_name: "Rahul Verma",
-  receiver_phone: "9123456789",
-  receiver_address: "Suite 405, Tech Plaza",
-  receiver_city: "Delhi",
-  receiver_state: "Delhi",
-  receiver_pincode: "110001",
-  weight: 0.5,
-  length: 10, width: 10, height: 10,
-  identical_package_count: 1,
-  package_type: "Standard Box",
-  product_description: "Electronics",
-  payment_mode: "Prepaid",
-  declared_value: 2500
+  order: {
+    client_order_id: "ORD-NEST-101",
+    service_type: "Prime"
+  },
+  origin: {
+    company: "Global Tech Hub",
+    name: "Amit Sharma",
+    phone: "9876543210",
+    address: "Warehouse 4, Sector B, Industrial Estate",
+    city: "Mumbai",
+    pincode: "400001"
+  },
+  destination: {
+    name: "Vikram Singh",
+    phone: "9123456789",
+    address: "Villa 10, Green Avenue, Sector 45",
+    city: "Bangalore",
+    pincode: "560001"
+  },
+  package: {
+    weight: 15.5,
+    package_count: 3,
+    description: "Electronics"
+  },
+  financials: {
+    payment_mode: "COD",
+    cod_amount: 6000,
+    declared_value: 15000
+  }
 };
 
 const bulkOrderObj = [
-  { ...singleOrderObj, client_order_id: "ORD-99882", payment_mode: "COD", cod_amount: 3000 },
-  { ...singleOrderObj, client_order_id: "ORD-99883", receiver_name: "Anjali Gupta", service_type: "Prime" }
+  { ...singleOrderObj, order: { client_order_id: "BULK-01" } },
+  { ...singleOrderObj, order: { client_order_id: "BULK-02" } }
 ];
 
 const responseJsonCreateSingle = `{
@@ -377,10 +366,11 @@ const responseJsonCreateSingle = `{
   "message": "1 Shipment(s) booked successfully",
   "data": [
     {
-      "awb_code": "UEX48291039",
-      "client_order_id": "ORD-99881",
-      "status": "order_placed",
-      "label_url": "https://www.universalexpress.live/print/UEX48291039"
+      "awb_code": "UEX77291039",
+      "client_order_id": "ORD-NEST-101",
+      "status": "PENDING PICKUP",
+      "total_pieces": 3,
+      "master_label_url": "https://www.universalexpress.live/print/UEX77291039?all=true"
     }
   ]
 }`;
@@ -389,93 +379,31 @@ const responseJsonCreateBulk = `{
   "success": true,
   "message": "2 Shipment(s) booked successfully",
   "data": [
-    {
-      "awb_code": "UEX48291039",
-      "client_order_id": "ORD-99882",
-      "status": "order_placed",
-      "label_url": "https://www.universalexpress.live/print/UEX48291039"
-    },
-    {
-      "awb_code": "UEX48291040",
-      "client_order_id": "ORD-99883",
-      "status": "order_placed",
-      "label_url": "https://www.universalexpress.live/print/UEX48291040"
-    }
+    { "awb_code": "UEX77291039", "master_label_url": "..." },
+    { "awb_code": "UEX77291040", "master_label_url": "..." }
   ]
 }`;
 
 const responseJsonTrackSingle = `{
   "success": true,
   "data": {
-    "awb": "UEX48291039",
-    "status": {
-        "current": "IN-TRANSIT",
-        "booked_on": "2026-03-04T10:00:00Z"
+    "awb": "UEX77291039",
+    "status": { "current": "Delivered", "booked_on": "2026-03-04T10:00:00Z" },
+    "route": { "origin": "Mumbai, MH", "destination": "Bangalore, KA" },
+    "documents": { 
+        "pod_urls": ["https://www.universalexpress.live/storage/v1/object/public/evidence/pod-image.jpg"] 
     },
-    "route": { "origin": "Mumbai, Maharashtra", "destination": "Delhi, Delhi" },
-    "parties": { "sender": "Sonu Kumar", "receiver": "Rahul Verma" },
-    "details": { "weight": 0.5, "type": "Standard Box" },
-    "financials": { "payment_mode": "Prepaid", "cod_to_collect": 0, "insured_value": 2500 },
-    "documents": { "label_url": "https://www.universalexpress.live/print/UEX48291039" },
     "history": [
-        { 
-          "status": "IN-TRANSIT", 
-          "location": "Mumbai Hub", 
-          "description": "left from origin", 
-          "timestamp": "2026-03-05T09:30:00Z", 
-          "remark_status_code": "200" 
-        },
-        { 
-          "status": "PICKUP DONE", 
-          "location": "Sender Warehouse", 
-          "description": "Package successfully collected", 
-          "timestamp": "2026-03-04T14:15:00Z", 
-          "remark_status_code": "100" 
-        }
+        { "status": "Delivered", "location": "Bangalore", "timestamp": "2026-03-06T14:00:00Z", "remark_status_code": "400" }
     ]
   }
 }`;
 
 const responseJsonTrackBulk = `{
   "success": true,
-  "total_requested": 2,
-  "total_found": 2,
-  "data": [
-    {
-      "awb": "UEX48291039",
-      "status": { "current": "IN-TRANSIT", "booked_on": "2026-03-04T10:00:00Z" },
-      "route": { "origin": "Mumbai, Maharashtra", "destination": "Delhi, Delhi" },
-      "parties": { "sender": "Sonu Kumar", "receiver": "Rahul Verma" },
-      "details": { "weight": 0.5, "type": "Standard Box" },
-      "financials": { "payment_mode": "Prepaid", "cod_to_collect": 0, "insured_value": 2500 },
-      "documents": { "label_url": "https://www.universalexpress.live/print/UEX48291039" },
-      "history": [
-        { 
-          "status": "IN-TRANSIT", 
-          "location": "Mumbai Hub", 
-          "description": "left from origin", 
-          "timestamp": "2026-03-05T09:30:00Z", 
-          "remark_status_code": "200" 
-        }
-      ]
-    },
-    {
-      "awb": "UEX48291040",
-      "status": { "current": "DELIVERED", "booked_on": "2026-03-02T11:00:00Z" },
-      "route": { "origin": "Mumbai, Maharashtra", "destination": "Pune, Maharashtra" },
-      "parties": { "sender": "Global Warehouse", "receiver": "Anjali Gupta" },
-      "details": { "weight": 0.5, "type": "Standard Box" },
-      "financials": { "payment_mode": "COD", "cod_to_collect": 3000, "insured_value": 2500 },
-      "documents": { "label_url": "https://www.universalexpress.live/print/UEX48291040" },
-      "history": [
-        { 
-          "status": "DELIVERED", 
-          "location": "Pune", 
-          "description": "Successfully handed to consignee", 
-          "timestamp": "2026-03-04T16:45:00Z", 
-          "remark_status_code": "400" 
-        }
-      ]
-    }
+  "summary": { "total": 2, "found": 2, "not_found": 0 },
+  "results": [
+    { "awb": "UEX77291039", "status": { "current": "Delivered" }, "documents": { "pod_urls": [...] } },
+    { "awb": "UEX77291040", "status": { "current": "In Transit" }, "documents": { "pod_urls": [] } }
   ]
 }`;
