@@ -1,6 +1,5 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // ✅ keep your existing configs
   typescript: {
     ignoreBuildErrors: true,
   },
@@ -8,7 +7,6 @@ const nextConfig = {
     ignoreDuringBuilds: true,
   },
 
-  // 🚀 REQUIRED FOR PUPPETEER
   experimental: {
     serverComponentsExternalPackages: [
       "puppeteer-core",
@@ -16,10 +14,15 @@ const nextConfig = {
     ],
   },
 
-  // 🚀 EXTRA SAFETY (very important for Vercel)
+  // ✅ FORCE WEBPACK (VERY IMPORTANT)
   webpack: (config) => {
     config.externals.push("puppeteer-core", "@sparticuz/chromium");
     return config;
+  },
+
+  // ✅ DISABLE TURBOPACK COMPLETELY
+  turbopack: {
+    resolveAlias: {},
   },
 };
 
