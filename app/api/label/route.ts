@@ -141,9 +141,13 @@ export async function GET(req: Request) {
     `;
 
     // ✅ PRODUCTION SAFE LAUNCH
-    const browser = await puppeteer.launch({
+    const executablePath = await chromium.executablePath(
+  process.env.CHROMIUM_PATH // optional override
+);
+
+const browser = await puppeteer.launch({
   args: chromium.args,
-  executablePath: await chromium.executablePath(),
+  executablePath,
   headless: true,
 });
 

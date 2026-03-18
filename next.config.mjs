@@ -1,14 +1,26 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // 1. Force the build to ignore TypeScript errors
+  // ✅ keep your existing configs
   typescript: {
     ignoreBuildErrors: true,
   },
-  // 2. Force the build to ignore ESLint errors
   eslint: {
     ignoreDuringBuilds: true,
   },
-  // 3. We removed the 'experimental' block entirely to fix the red line
+
+  // 🚀 REQUIRED FOR PUPPETEER
+  experimental: {
+    serverComponentsExternalPackages: [
+      "puppeteer-core",
+      "@sparticuz/chromium"
+    ],
+  },
+
+  // 🚀 EXTRA SAFETY (very important for Vercel)
+  webpack: (config) => {
+    config.externals.push("puppeteer-core", "@sparticuz/chromium");
+    return config;
+  },
 };
 
 export default nextConfig;
