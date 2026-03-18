@@ -9,10 +9,11 @@
     "lint": "eslint"
   },
   "dependencies": {
-    "@sparticuz/chromium": "^143.0.4",
+    "@react-pdf/renderer": "^4.3.2",
     "@supabase/ssr": "^0.8.0",
-    "@supabase/supabase-js": "^2.90.0",
+    "@supabase/supabase-js": "^2.99.2",
     "autoprefixer": "^10.4.23",
+    "bwip-js": "^4.8.0",
     "clsx": "^2.1.1",
     "framer-motion": "^12.28.2",
     "html2canvas": "^1.4.1",
@@ -23,8 +24,7 @@
     "next": "16.1.1",
     "next-themes": "^0.4.6",
     "postcss": "^8.5.6",
-    "puppeteer": "^24.39.1",
-    "puppeteer-core": "^10.4.0",
+    "qrcode": "^1.5.4",
     "razorpay": "^2.9.6",
     "react": "19.2.3",
     "react-barcode": "^1.6.1",
@@ -35,7 +35,9 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
+    "@types/bwip-js": "^3.2.3",
     "@types/node": "^20",
+    "@types/qrcode": "^1.5.6",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "babel-plugin-react-compiler": "1.0.0",
