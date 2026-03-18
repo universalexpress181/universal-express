@@ -2,15 +2,14 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import * as XLSX from "xlsx"; // 📦 npm install xlsx
+import * as XLSX from "xlsx"; 
 import { 
   Package, Truck, CheckCircle, Clock, Search, 
   RefreshCw, XCircle, Trash2, ArrowRight, FileUp, Settings, 
-  ArrowLeftRight, Table, Database 
+  Table, Database, AlertTriangle, ShieldAlert
 } from "lucide-react"; 
 import Link from "next/link";
 
-// 🆕 Fields allowed to be updated in your Database
 const DB_COLUMNS = [
     { value: "current_status", label: "Shipment Status" },
     { value: "payment_status", label: "Payment Status" },
@@ -31,13 +30,12 @@ export default function AllShipmentsPage() {
   const [sheetHeaders, setSheetHeaders] = useState<string[]>([]);
   
   // ⚙️ Mapping Configuration
-  const [targetDbColumn, setTargetDbColumn] = useState("current_status"); // What to update in DB
-  const [excelRefCol, setExcelRefCol] = useState(""); // Which Excel col has Reference ID
-  const [excelValCol, setExcelValCol] = useState(""); // Which Excel col has the New Value
+  const [targetDbColumn, setTargetDbColumn] = useState("current_status"); 
+  const [excelRefCol, setExcelRefCol] = useState(""); 
+  const [excelValCol, setExcelValCol] = useState(""); 
   
   const [bulkLoading, setBulkLoading] = useState(false);
 
-  // 1. Fetch Logic
   const fetchAll = async () => {
     const { data } = await supabase
       .from('shipments')
@@ -48,14 +46,12 @@ export default function AllShipmentsPage() {
     setLoading(false);
   };
 
-  // 2. Handle File Upload & Parse Headers
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setBulkFile(file);
 
-    // Read headers immediately to populate dropdowns
     const reader = new FileReader();
     reader.onload = (evt) => {
         const bstr = evt.target?.result;
@@ -63,13 +59,11 @@ export default function AllShipmentsPage() {
         const wsname = wb.SheetNames[0];
         const ws = wb.Sheets[wsname];
         
-        // Extract first row as headers
         const data: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1 });
         if (data && data.length > 0) {
-            const headers = data[0].map(String); // Ensure strings
+            const headers = data[0].map(String); 
             setSheetHeaders(headers);
             
-            // 🧠 Smart Auto-Select: Try to guess columns
             const likelyRef = headers.find(h => /ref|id|order|awb/i.test(h));
             const likelyVal = headers.find(h => /status|state|val/i.test(h));
             
@@ -83,7 +77,6 @@ export default function AllShipmentsPage() {
     reader.readAsBinaryString(file);
   };
 
-  // 3. Submit Bulk Sync
   const handleBulkSync = async () => {
     if (!bulkFile || !excelRefCol || !excelValCol) return alert("Please map the Excel columns first.");
     setBulkLoading(true);
@@ -105,7 +98,6 @@ export default function AllShipmentsPage() {
 
         alert(`✅ Sync Complete!\nUpdated: ${data.results.success}\nFailed: ${data.results.failed}`);
         
-        // Reset
         setBulkFile(null); 
         setSheetHeaders([]);
         fetchAll(); 
@@ -116,7 +108,6 @@ export default function AllShipmentsPage() {
     }
   };
 
-  // 4. Delete Logic
   const handleDelete = async (id: string, awb: string) => {
       if (!confirm(`⚠️ PERMANENT ACTION\n\nDelete shipment #${awb}?`)) return;
       const { error } = await supabase.from('shipments').delete().eq('id', id);
@@ -131,15 +122,36 @@ export default function AllShipmentsPage() {
     return () => { supabase.removeChannel(channel); };
   }, []);
 
-  const filteredShipments = shipments.filter(s => {
-    const matchesStatus = 
-      filterStatus === 'all' ? true :
-      filterStatus === 'pending' ? (s.current_status === 'created' || s.current_status === 'manifested') :
-      filterStatus === 'intransit' ? (s.current_status === 'in_transit' || s.current_status === 'out_for_delivery') :
-      filterStatus === 'delivered' ? s.current_status === 'delivered' :
-      filterStatus === 'cancelled' ? s.current_status === 'cancelled' :
-      filterStatus === 'rto' ? (s.current_status === 'rto_initiated' || s.current_status === 'rto_delivered') : true;
+  // 🚀 ULTRA-ROBUST FILTER LOGIC (Now includes RTO sub-states, Undelivered, Damage, Lost)
+  const checkStatusMatch = (tabId: string, statusRaw: string) => {
+      if (tabId === 'all') return true;
+      if (!statusRaw) return false;
+      
+      const s = statusRaw.toLowerCase().replace(/[^a-z0-9]/g, '');
+      
+      switch(tabId) {
+          case 'pending': 
+              return ['created', 'manifested', 'pendingpickup', 'orderplaced'].includes(s);
+          case 'intransit': 
+              return ['intransit', 'outfordelivery', 'pickedup'].includes(s) || (s.includes('transit') && !s.includes('rto'));
+          case 'delivered': 
+              return ['delivered'].includes(s) && !s.includes('rto');
+          case 'undelivered': 
+              return s.includes('undelivered') && !s.includes('rto');
+          case 'rto': 
+              // Catches rtoinitiated, rtointransit, rtoundelivered, rtodelivered
+              return s.includes('rto');
+          case 'exceptions':
+              return s.includes('lost') || s.includes('damage') || s.includes('fail');
+          case 'cancelled': 
+              return ['cancelled', 'cancel', 'pickupcancelled'].includes(s) || s.includes('cancel');
+          default: 
+              return true;
+      }
+  };
 
+  const filteredShipments = shipments.filter(s => {
+    const matchesStatus = checkStatusMatch(filterStatus, s.current_status);
     const matchesSearch = 
       s.awb_code.toLowerCase().includes(search.toLowerCase()) || 
       s.receiver_name.toLowerCase().includes(search.toLowerCase());
@@ -147,12 +159,15 @@ export default function AllShipmentsPage() {
     return matchesStatus && matchesSearch;
   });
 
+  // 🚀 UPDATED TABS LIST
   const tabs = [
     { id: "all", label: "All", icon: Package },
     { id: "pending", label: "Pending", icon: Clock },
     { id: "intransit", label: "Transit", icon: Truck },
     { id: "delivered", label: "Delivered", icon: CheckCircle },
+    { id: "undelivered", label: "Undelivered", icon: AlertTriangle },
     { id: "rto", label: "RTO", icon: RefreshCw },
+    { id: "exceptions", label: "Lost/Damage", icon: ShieldAlert },
     { id: "cancelled", label: "Cancelled", icon: XCircle },
   ];
 
@@ -164,8 +179,8 @@ export default function AllShipmentsPage() {
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
              <h1 className="text-3xl font-black text-gray-900 dark:text-white flex items-center gap-3 tracking-tight">
-               Global Operations
-               <span className="flex h-3 w-3 relative">
+                Global Operations
+                <span className="flex h-3 w-3 relative">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                   <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
                </span>
@@ -216,7 +231,7 @@ export default function AllShipmentsPage() {
                         </label>
                     </div>
 
-                    {/* 2. Match Ref (EXCEL COLUMN) */}
+                    {/* 2. Match Ref */}
                     <div className={`space-y-2 transition-opacity duration-500 ${sheetHeaders.length > 0 ? 'opacity-100' : 'opacity-30 pointer-events-none'}`}>
                         <label className="text-[10px] font-black text-gray-400 dark:text-slate-500 uppercase ml-1 tracking-widest flex items-center gap-1">
                             <Search size={10}/> Excel: Match Ref By
@@ -230,7 +245,7 @@ export default function AllShipmentsPage() {
                         </select>
                     </div>
 
-                    {/* 3. New Value (EXCEL COLUMN) */}
+                    {/* 3. New Value */}
                     <div className={`space-y-2 transition-opacity duration-500 ${sheetHeaders.length > 0 ? 'opacity-100' : 'opacity-30 pointer-events-none'}`}>
                         <label className="text-[10px] font-black text-gray-400 dark:text-slate-500 uppercase ml-1 tracking-widest flex items-center gap-1">
                             <Table size={10}/> Excel: Status/Value
@@ -244,7 +259,7 @@ export default function AllShipmentsPage() {
                         </select>
                     </div>
 
-                    {/* 4. Target (DATABASE COLUMN) */}
+                    {/* 4. Target */}
                     <div className="flex gap-2">
                         <div className="space-y-2 flex-1">
                             <label className="text-[10px] font-black text-gray-400 dark:text-slate-500 uppercase ml-1 tracking-widest flex items-center gap-1">
@@ -273,20 +288,12 @@ export default function AllShipmentsPage() {
             </div>
         </div>
 
-        {/* 🔵 FILTER TABS & TABLE (Existing Code) */}
+        {/* 🔵 FILTER TABS & TABLE */}
         <div className="flex flex-wrap gap-2 border-b border-gray-200 dark:border-slate-800 pb-1">
           {tabs.map((tab) => {
              const Icon = tab.icon;
              const isActive = filterStatus === tab.id;
-             const count = shipments.filter(s => {
-                  if(tab.id === 'all') return true;
-                  if(tab.id === 'pending') return (s.current_status === 'created' || s.current_status === 'manifested');
-                  if(tab.id === 'intransit') return (s.current_status === 'in_transit' || s.current_status === 'out_for_delivery');
-                  if(tab.id === 'delivered') return s.current_status === 'delivered';
-                  if(tab.id === 'cancelled') return s.current_status === 'cancelled';
-                  if(tab.id === 'rto') return (s.current_status === 'rto_initiated' || s.current_status === 'rto_delivered');
-                  return false;
-             }).length;
+             const count = shipments.filter(s => checkStatusMatch(tab.id, s.current_status)).length;
 
              return (
                  <button
@@ -345,7 +352,7 @@ export default function AllShipmentsPage() {
                               >
                                   Manage <ArrowRight size={14} className="group-hover/btn:translate-x-0.5 transition-transform"/>
                               </Link>
-                              {s.current_status === 'cancelled' && (
+                              {s.current_status?.toLowerCase().includes('cancel') && (
                                   <button
                                       onClick={() => handleDelete(s.id, s.awb_code)}
                                       className="bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:hover:bg-red-900/40 text-red-500 dark:text-red-400 px-3 py-2 rounded-lg transition-all border border-red-100 dark:border-red-900/30"
@@ -367,22 +374,37 @@ export default function AllShipmentsPage() {
   );
 }
 
+// 🚀 ULTRA-ROBUST BADGE LOGIC (Including new RTO/Lost/Damage states)
 function StatusBadge({ status }: { status: string }) {
-    const styles: any = {
-        created: "bg-gray-100 text-gray-600 dark:bg-slate-800 dark:text-slate-400 border-gray-200 dark:border-slate-700",
-        manifested: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400 border-purple-200 dark:border-purple-900/50",
-        in_transit: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 border-blue-200 dark:border-blue-900/50",
-        out_for_delivery: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400 border-yellow-200 dark:border-yellow-900/50",
-        delivered: "bg-emerald-100 text-emerald-700 dark:bg-green-900/30 dark:text-green-400 border-emerald-200 dark:border-green-900/50",
-        rto_initiated: "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400 border-orange-200 dark:border-orange-900/50",
-        rto_delivered: "bg-orange-200 text-orange-800 dark:bg-orange-900/50 dark:text-orange-300 border-orange-300 dark:border-orange-800",
-        cancelled: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border-red-200 dark:border-red-900/50",
-        pickup_failed: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border-red-200 dark:border-red-900/50",
-    };
-    const styleClass = styles[status] || styles.created;
+    if (!status) return <span className="px-3 py-1 rounded-lg border text-[10px] font-bold uppercase tracking-wide bg-gray-100 text-gray-600 dark:bg-slate-800 dark:text-slate-400 border-gray-200 dark:border-slate-700">UNKNOWN</span>;
+    
+    const s = status.toLowerCase().replace(/[^a-z0-9]/g, '');
+    let styleClass = "bg-gray-100 text-gray-600 dark:bg-slate-800 dark:text-slate-400 border-gray-200 dark:border-slate-700";
+
+    if (['orderplaced', 'created', 'pendingpickup', 'manifested'].includes(s)) {
+        styleClass = "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 border-blue-200 dark:border-blue-900/50";
+    } else if (s.includes('pickedup')) {
+        styleClass = "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400 border-orange-200 dark:border-orange-900/50";
+    } else if (s.includes('transit') && !s.includes('rto')) {
+        styleClass = "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400 border-purple-200 dark:border-purple-900/50";
+    } else if (s.includes('delivery') && !s.includes('rto')) {
+        styleClass = "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400 border-yellow-200 dark:border-yellow-900/50";
+    } else if (s.includes('delivered') && !s.includes('rto')) {
+        styleClass = "bg-emerald-100 text-emerald-700 dark:bg-green-900/30 dark:text-green-400 border-emerald-200 dark:border-green-900/50";
+    } else if (s.includes('rto')) {
+        // Red for RTO undelivered/lost, Orange for standard RTO movement
+        styleClass = s.includes('undelivered') || s.includes('fail') 
+            ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border-red-200 dark:border-red-900/50"
+            : "bg-orange-200 text-orange-800 dark:bg-orange-900/50 dark:text-orange-300 border-orange-300 dark:border-orange-800";
+    } else if (s.includes('undelivered')) {
+        styleClass = "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400 border-rose-200 dark:border-rose-900/50";
+    } else if (s.includes('cancel') || s.includes('fail') || s.includes('lost') || s.includes('damage')) {
+        styleClass = "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border-red-200 dark:border-red-900/50";
+    }
+
     return (
         <span className={`px-3 py-1 rounded-lg border text-[10px] font-bold uppercase tracking-wide ${styleClass}`}>
-            {status.replace(/_/g, ' ')}
+            {status.replace(/[_\-]/g, ' ')}
         </span>
     );
 }

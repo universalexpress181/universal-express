@@ -11,9 +11,6 @@ export async function POST(request: Request) {
   let userId = null;
 
   try {
-    // ---------------------------------------------------------
-    // 1. AUTHENTICATION
-    // ---------------------------------------------------------
     const apiKey = request.headers.get('x-api-key');
     if (!apiKey) return NextResponse.json({ error: 'Missing x-api-key header' }, { status: 401 });
 
@@ -26,9 +23,6 @@ export async function POST(request: Request) {
     if (keyError || !keyData?.is_active) return NextResponse.json({ error: 'Invalid API Key' }, { status: 401 });
     userId = keyData.user_id;
 
-    // ---------------------------------------------------------
-    // 2. PARSE REQUEST
-    // ---------------------------------------------------------
     const requestBody = await request.json();
     
     let shipmentsToProcess = [];
@@ -45,27 +39,34 @@ export async function POST(request: Request) {
     const insertData = [];
     const generatedResponseData = [];
 
-    // ---------------------------------------------------------
-    // 3. LOOP & PROCESS
-    // ---------------------------------------------------------
     for (const item of shipmentsToProcess) {
-        // Validation
-        if (!item.sender_name || !item.receiver_name || !item.receiver_address) {
-            throw new Error(`Missing required fields for receiver: ${item.receiver_name || 'Unknown'}`);
+        
+        const order = item.order || item;
+        const origin = item.origin || item;
+        const dest = item.destination || item;
+        const pkg = item.package || item.package_details || item;
+        const fin = item.financials || item;
+
+        const senderName = origin.name || item.sender_name;
+        const receiverName = dest.name || item.receiver_name;
+        const receiverAddress = dest.address || item.receiver_address;
+
+        if (!senderName || !receiverName || !receiverAddress) {
+            throw new Error(`Missing required origin/destination fields for order.`);
         }
 
-        // --- A. GENERATE UNIQUE INTERNAL AWB ---
+        const packageCount = parseInt(pkg.package_count || item.identical_package_count) || 1;
+        
+        const inputMode = (fin.payment_mode || 'Prepaid').toUpperCase();
+        const mode = inputMode === 'COD' ? 'COD' : 'Prepaid';
+        const declaredValue = parseFloat(fin.declared_value) || 0;
+        const codAmount = mode === 'COD' ? (parseFloat(fin.cod_amount) || declaredValue) : 0;
+
+        const requestedService = order.service_type || 'Prime';
+        const partnerName = requestedService === 'Ground Cargo' ? 'DPWORLD' : 'DTDC';
+
         const awb = `UEX${Math.floor(10000000 + Math.random() * 90000000)}`;
 
-        // --- B. HANDLE PAYMENT MODE & LOGIC ---
-        const inputMode = (item.payment_mode || 'Prepaid').toUpperCase();
-        const mode = inputMode === 'COD' ? 'COD' : 'Prepaid';
-        const declaredValue = parseFloat(item.declared_value) || 0;
-        const codAmount = mode === 'COD' ? (parseFloat(item.cod_amount) || declaredValue) : 0;
-        
-        // --- C. ALLOCATE PARTNER AWB FROM BANK (BACKEND ONLY) ---
-        const requestedService = item.service_type || 'Prime';
-        
         const { data: partnerAwb, error: rpcError } = await supabaseAdmin.rpc('allocate_next_awb', { 
             requested_service: requestedService, 
             target_uex_awb: awb 
@@ -75,93 +76,82 @@ export async function POST(request: Request) {
             throw new Error(`Inventory stock empty for ${requestedService}. Please restock AWB Bank.`);
         }
 
-        const partnerName = requestedService === 'Ground Cargo' ? 'DPWORLD' : 'DTDC';
-
-        // --- D. PREPARE DATABASE ROW ---
         insertData.push({
             user_id: userId,
             awb_code: awb,
-            
-            // 🎯 INTERNAL DATA
             reference_id: partnerAwb, 
             partner_name: partnerName,
             service_type: requestedService,
-            
-            // Client References
-            client_order_id: item.client_order_id || null,
-            shipment_type: item.shipment_type || 'forward',
-            
-            // Sender details
-            ship_from_company: item.ship_from_company,
-            sender_name: item.sender_name,
-            sender_phone: item.sender_phone,
-            sender_address: item.sender_address,
-            sender_city: item.sender_city,
-            sender_state: item.sender_state,
-            sender_pincode: item.sender_pincode,
-            sender_email: item.sender_email || null,
-            
-            // Receiver details
-            ship_to_company: item.ship_to_company,
-            receiver_name: item.receiver_name,
-            receiver_phone: item.receiver_phone,
-            receiver_address: item.receiver_address,
-            receiver_city: item.receiver_city,
-            receiver_state: item.receiver_state,
-            receiver_pincode: item.receiver_pincode,
-            
-            // Package & Dimensions
-            package_type: item.package_type || 'Standard Box',
-            product_description: item.product_description || 'General Goods',
-            weight: parseFloat(item.weight) || 0.5,
-            length: parseFloat(item.length) || 10,
-            width: parseFloat(item.width) || 10,
-            height: parseFloat(item.height) || 10,
-            identical_package_count: parseInt(item.identical_package_count) || 1,
-            
-            // Financials & Status
+            client_order_id: order.client_order_id || null,
+            shipment_type: order.shipment_type || 'forward',
+            ship_from_company: origin.company || item.ship_from_company,
+            sender_name: senderName,
+            sender_phone: origin.phone || item.sender_phone,
+            sender_address: origin.address || item.sender_address,
+            sender_city: origin.city || item.sender_city,
+            sender_state: origin.state || item.sender_state,
+            sender_pincode: origin.pincode || item.sender_pincode,
+            sender_email: origin.email || item.sender_email || null,
+            ship_to_company: dest.company || item.ship_to_company,
+            receiver_name: receiverName,
+            receiver_phone: dest.phone || item.receiver_phone,
+            receiver_address: receiverAddress,
+            receiver_city: dest.city || item.receiver_city,
+            receiver_state: dest.state || item.receiver_state,
+            receiver_pincode: dest.pincode || item.receiver_pincode,
+            package_type: pkg.type || item.package_type || 'Standard Box',
+            product_description: pkg.description || item.product_description || 'General Goods',
+            weight: parseFloat(pkg.weight) || 0.5,
+            length: parseFloat(pkg.length) || 10,
+            width: parseFloat(pkg.width) || 10,
+            height: parseFloat(pkg.height) || 10,
+            identical_package_count: packageCount, 
             payment_mode: mode,
             cod_amount: codAmount,
             declared_value: declaredValue,
-            
-            // 🚀 AUTOMATICALLY INJECTED BACKEND STATUS
             current_status: 'PENDING PICKUP',
             remark_status_code: '99',
             remark: 'Shipment created; waiting for courier collection'
         });
 
-        // --- E. ADD TO RESPONSE (White-Labeled) ---
+        const labelUrls = [];
+        if (packageCount === 1) {
+            labelUrls.push(`${process.env.NEXT_PUBLIC_SITE_URL}/print/${awb}`);
+        } else {
+            for (let p = 1; p <= packageCount; p++) {
+                labelUrls.push(`${process.env.NEXT_PUBLIC_SITE_URL}/print/${awb}?piece=${p}&total=${packageCount}`);
+            }
+        }
+
+        // 🚀 NEW: Generate a Master Link if there are multiple boxes
+        const masterLabelUrl = packageCount > 1 
+            ? `${process.env.NEXT_PUBLIC_SITE_URL}/print/${awb}?all=true` 
+            : labelUrls[0];
+
         generatedResponseData.push({
-            awb_code: awb,
-            client_order_id: item.client_order_id || undefined,
-            receiver_name: item.receiver_name,
+            awb_code: awb, 
+            client_order_id: order.client_order_id || undefined,
+            receiver_name: receiverName,
             payment_mode: mode,
-            
-            // 🚀 RETURN THE OFFICIAL STATUS IN THE API RESPONSE
             status: "PENDING PICKUP",
             remark_status_code: "99",
-            
-            label_url: `${process.env.NEXT_PUBLIC_SITE_URL}/print/${awb}`
+            total_pieces: packageCount,
+            master_label_url: masterLabelUrl, // 🚀 Give them the 1-click print-all link
+            labels: labelUrls 
         });
     }
 
-    // ---------------------------------------------------------
-    // 4. DATABASE INSERT
-    // ---------------------------------------------------------
     const { error: insertError } = await supabaseAdmin
         .from('shipments')
         .insert(insertData);
 
     if (insertError) throw insertError;
 
-    // ---------------------------------------------------------
-    // 5. LOGGING & USAGE
-    // ---------------------------------------------------------
     await supabaseAdmin.rpc('increment_key_usage', { key_id: keyData.id });
 
     return NextResponse.json({
         success: true,
-        message: `${generatedResponseData.length} Shipment(s) booked successfully`,
+        message: `${insertData.length} Shipment(s) booked successfully`,
         data: generatedResponseData
     });
 

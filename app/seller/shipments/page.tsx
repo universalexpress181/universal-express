@@ -7,7 +7,7 @@ import {
   Search, Filter, Package, Printer, 
   Eye, XCircle, Calendar, MapPin, IndianRupee, 
   Truck, CheckCircle, Clock, AlertTriangle, X,
-  CreditCard, CalendarDays, Box 
+  CalendarDays, Box 
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -57,17 +57,15 @@ export default function MyOrdersPage() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
-    // ⚡ PERFORMANCE: Select ONLY what we need
     const { data, error } = await supabase
       .from('shipments')
-      .select('id, awb_code, created_at, receiver_name, receiver_city, receiver_phone, receiver_address, receiver_pincode, weight, payment_mode, cod_amount, declared_value, current_status')
+      .select('id, awb_code, created_at, receiver_name, receiver_city, receiver_phone, receiver_address, receiver_pincode, weight, payment_mode, cod_amount, declared_value, current_status, identical_package_count')
       .eq('user_id', user.id)
       .order('created_at', { ascending: false });
 
     if (error) console.error(error);
     else setOrders(data || []);
     
-    // Artificial small delay for smoothness
     setTimeout(() => setLoading(false), 300);
   };
 
@@ -131,6 +129,12 @@ export default function MyOrdersPage() {
     return matchesSearch && matchesStatus && matchesDate;
   });
 
+  const isEligibleForCancellation = (status: string) => {
+      if (!status) return false;
+      const s = status.toLowerCase().replace(/_/g, ' ');
+      return ['order placed', 'created', 'pending pickup'].includes(s);
+  };
+
   return (
     <motion.div 
       initial="hidden" 
@@ -139,7 +143,6 @@ export default function MyOrdersPage() {
       variants={containerVariants}
       className="max-w-6xl mx-auto space-y-8 pb-20 px-4 md:px-0 relative"
     >
-        {/* ✨ Background Glows */}
         <div className="fixed top-20 right-20 w-96 h-96 bg-blue-500/10 dark:bg-blue-500/5 rounded-full blur-[100px] pointer-events-none -z-10" />
         <div className="fixed bottom-20 left-20 w-96 h-96 bg-purple-500/10 dark:bg-purple-500/5 rounded-full blur-[100px] pointer-events-none -z-10" />
 
@@ -170,7 +173,6 @@ export default function MyOrdersPage() {
       {/* 🔍 FILTER BAR */}
       <motion.div variants={itemVariants} className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xl shadow-slate-200/50 dark:shadow-none flex flex-col md:flex-row gap-4">
         
-        {/* 1. Search Box */}
         <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18}/>
             <input 
@@ -182,7 +184,6 @@ export default function MyOrdersPage() {
             />
         </div>
         
-        {/* 2. Date Dropdown */}
         <div className="relative w-full md:w-48">
             <CalendarDays className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16}/>
             <select 
@@ -201,7 +202,6 @@ export default function MyOrdersPage() {
             </div>
         </div>
 
-        {/* 3. DATE PICKER */}
         {dateFilter === 'specific_date' && (
             <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="relative w-full md:w-auto">
                 <input 
@@ -213,7 +213,6 @@ export default function MyOrdersPage() {
             </motion.div>
         )}
 
-        {/* 4. Status Dropdown */}
         <div className="relative w-full md:w-48">
             <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16}/>
             <select 
@@ -255,7 +254,11 @@ export default function MyOrdersPage() {
                     <p className="text-slate-500 dark:text-slate-400 text-sm mt-2">Try adjusting your filters.</p>
                 </motion.div>
             ) : (
-                filteredOrders.map((order) => (
+                filteredOrders.map((order) => {
+                    const pkgCount = order.identical_package_count || 1;
+                    const printUrl = pkgCount > 1 ? `/print/${order.awb_code}?all=true` : `/print/${order.awb_code}`;
+
+                    return (
                     <motion.div 
                         layout 
                         key={order.id} 
@@ -318,16 +321,25 @@ export default function MyOrdersPage() {
                                 >
                                     <Eye size={20}/>
                                 </motion.button>
-                                <Link href={`/print/${order.awb_code}`} target="_blank">
-                                    <motion.button whileTap={{ scale: 0.9 }} className="p-2 text-slate-400 hover:text-purple-500 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-xl transition-colors" title="Print Label">
+                                <Link href={printUrl} target="_blank">
+                                    <motion.button 
+                                        whileTap={{ scale: 0.9 }} 
+                                        className="relative p-2 text-slate-400 hover:text-purple-500 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-xl transition-colors" 
+                                        title={pkgCount > 1 ? `Print All ${pkgCount} Labels` : "Print Label"}
+                                    >
                                         <Printer size={20}/>
+                                        {pkgCount > 1 && (
+                                            <span className="absolute -top-1.5 -right-1.5 bg-purple-500 text-white text-[9px] font-bold w-[18px] h-[18px] rounded-full flex items-center justify-center border-2 border-white dark:border-slate-900 shadow-sm">
+                                                {pkgCount}
+                                            </span>
+                                        )}
                                     </motion.button>
                                 </Link>
                             </div>
 
                         </div>
                     </motion.div>
-                ))
+                )})
             )}
         </AnimatePresence>
       </motion.div>
@@ -358,7 +370,6 @@ export default function MyOrdersPage() {
                     </div>
 
                     <div className="flex-1 overflow-y-auto p-6 space-y-8 bg-white dark:bg-slate-950">
-                        {/* ⚡ UPDATED: Removed "Public Page" Link, only Status Badge here */}
                         <div className="flex justify-center items-center bg-slate-50 dark:bg-slate-900 p-4 rounded-xl border border-slate-100 dark:border-slate-800">
                             <StatusBadge status={selectedOrder.current_status} />
                         </div>
@@ -374,19 +385,28 @@ export default function MyOrdersPage() {
                                 <div><p className="text-xs text-slate-500 uppercase font-bold mb-1">Address</p><p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">{selectedOrder.receiver_address}</p></div>
                             </div>
                         </div>
-                        {selectedOrder.current_status === 'created' ? (
+                        
+                        {/* 🚀 FIXED: Distinct states for Cancelled, Delivered, Pending, and In-Transit */}
+                        {isEligibleForCancellation(selectedOrder.current_status) ? (
                             <div className="pt-6 border-t border-slate-100 dark:border-slate-900">
                                 <div className="bg-red-50 dark:bg-red-900/10 border border-red-100 dark:border-red-900/30 p-5 rounded-2xl">
                                     <h4 className="text-red-600 dark:text-red-400 font-bold flex items-center gap-2 text-sm"><AlertTriangle size={18}/> Cancel Shipment?</h4>
-                                    <p className="text-xs text-red-500/80 dark:text-red-400/70 mt-2 mb-4 leading-relaxed">This order has not been picked up yet. You can cancel it now.</p>
+                                    <p className="text-xs text-red-500/80 dark:text-red-400/70 mt-2 mb-4 leading-relaxed">This order has not been picked up yet. You can still cancel it.</p>
                                     <motion.button whileTap={{ scale: 0.98 }} onClick={() => handleCancelOrder(selectedOrder.id)} className="w-full py-3 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl text-sm transition-colors shadow-lg shadow-red-500/20">Cancel Order</motion.button>
                                 </div>
                             </div>
-                        ) : selectedOrder.current_status === 'cancelled' ? (
+                        ) : selectedOrder.current_status?.toLowerCase().includes('cancel') ? (
                             <div className="bg-slate-100 dark:bg-slate-900 p-4 rounded-xl text-center text-slate-500 text-sm font-medium border border-slate-200 dark:border-slate-800">🚫 This order was cancelled.</div>
+                        ) : selectedOrder.current_status?.toLowerCase().includes('deliver') ? (
+                            <div className="bg-emerald-50 dark:bg-emerald-900/10 p-4 rounded-xl text-center text-emerald-600 dark:text-emerald-400 text-xs font-medium border border-emerald-100 dark:border-emerald-900/30">
+                                ✅ This shipment has been successfully delivered.
+                            </div>
                         ) : (
-                            <div className="bg-blue-50 dark:bg-blue-900/10 p-4 rounded-xl text-center text-blue-600 dark:text-blue-400 text-xs font-medium border border-blue-100 dark:border-blue-900/30">🔒 Cannot cancel: Order is already processing.</div>
+                            <div className="bg-blue-50 dark:bg-blue-900/10 p-4 rounded-xl text-center text-blue-600 dark:text-blue-400 text-xs font-medium border border-blue-100 dark:border-blue-900/30">
+                                🔒 Pickup is already done. To cancel this order, please contact customer care.
+                            </div>
                         )}
+
                     </div>
                 </motion.div>
             </>
@@ -407,42 +427,56 @@ function SkeletonRow() {
 }
 
 function getStatusColor(status: string) {
-    const colors: any = {
-        created: "bg-blue-500", picked_up: "bg-orange-500", in_transit: "bg-purple-500", out_for_delivery: "bg-yellow-500", delivered: "bg-emerald-500", cancelled: "bg-red-500",
-    };
-    return colors[status] || "bg-slate-500";
+    if (!status) return "bg-slate-500";
+    const s = status.toLowerCase().replace(/_/g, ' ');
+    if (['order placed', 'created', 'pending pickup'].includes(s)) return "bg-blue-500";
+    if (s.includes('picked up')) return "bg-orange-500";
+    if (s.includes('transit')) return "bg-purple-500";
+    if (s.includes('delivery')) return "bg-yellow-500";
+    if (s.includes('delivered')) return "bg-emerald-500";
+    if (s.includes('cancelled')) return "bg-red-500";
+    return "bg-slate-500";
 }
 
 function StatusBadge({ status }: { status: string }) {
-    const styles: any = {
-        created: "bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-500/20 dark:text-blue-300 dark:border-blue-500/30",
-        picked_up: "bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-500/20 dark:text-orange-300 dark:border-orange-500/30",
-        in_transit: "bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-500/20 dark:text-purple-300 dark:border-purple-500/30",
-        out_for_delivery: "bg-yellow-100 text-yellow-700 border-yellow-200 dark:bg-yellow-500/20 dark:text-yellow-300 dark:border-yellow-500/30",
-        delivered: "bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-500/30",
-        cancelled: "bg-red-100 text-red-700 border-red-200 dark:bg-red-500/20 dark:text-red-300 dark:border-red-500/30",
-    };
-    const style = styles[status] || "bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400";
+    if (!status) return null;
+    const s = status.toLowerCase().replace(/_/g, ' ');
+    let style = "bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400";
+    
+    if (['order placed', 'created', 'pending pickup'].includes(s)) style = "bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-500/20 dark:text-blue-300 dark:border-blue-500/30";
+    else if (s.includes('picked up')) style = "bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-500/20 dark:text-orange-300 dark:border-orange-500/30";
+    else if (s.includes('transit')) style = "bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-500/20 dark:text-purple-300 dark:border-purple-500/30";
+    else if (s.includes('delivery')) style = "bg-yellow-100 text-yellow-700 border-yellow-200 dark:bg-yellow-500/20 dark:text-yellow-300 dark:border-yellow-500/30";
+    else if (s.includes('delivered')) style = "bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-500/30";
+    else if (s.includes('cancelled')) style = "bg-red-100 text-red-700 border-red-200 dark:bg-red-500/20 dark:text-red-300 dark:border-red-500/30";
+
     const label = status.replace(/_/g, " ");
     return <span className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-wide border ${style}`}>{label}</span>;
 }
 
 function Timeline({ status }: { status: string }) {
+    if (!status) return null;
+    const s = status.toLowerCase().replace(/_/g, ' ');
+    
     const steps = [
         { id: 'created', label: 'Order Created', icon: Package },
-        { id: 'picked_up', label: 'Picked Up', icon: Truck },
-        { id: 'in_transit', label: 'In Transit', icon: Clock },
-        { id: 'out_for_delivery', label: 'Out for Delivery', icon: Truck },
+        { id: 'picked up', label: 'Picked Up', icon: Truck },
+        { id: 'in transit', label: 'In Transit', icon: Clock },
+        { id: 'out for delivery', label: 'Out for Delivery', icon: Truck },
         { id: 'delivered', label: 'Delivered', icon: CheckCircle },
     ];
-    let activeIndex = steps.findIndex(s => s.id === status);
-    if (status === 'cancelled') activeIndex = -1; 
-    if (status === 'in_transit') activeIndex = 2;
-    if (status === 'out_for_delivery') activeIndex = 3;
+    
+    let activeIndex = 0; 
+    if (s.includes('picked up')) activeIndex = 1;
+    if (s.includes('transit')) activeIndex = 2;
+    if (s.includes('out for delivery')) activeIndex = 3;
+    if (s.includes('delivered')) activeIndex = 4;
+    
+    if (s.includes('cancelled')) activeIndex = -1; 
 
     return (
         <div className="relative border-l-2 border-slate-200 dark:border-slate-800 ml-3 space-y-8 py-2">
-            {status === 'cancelled' ? (
+            {s.includes('cancelled') ? (
                 <div className="ml-6 flex items-center gap-3 text-red-500"><XCircle size={20}/> <span className="font-bold">Order Cancelled</span></div>
             ) : (
                 steps.map((step, index) => {

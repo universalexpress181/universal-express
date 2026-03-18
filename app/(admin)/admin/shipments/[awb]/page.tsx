@@ -71,7 +71,6 @@ const itemVariants = {
   visible: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 200, damping: 20 } }
 };
 
-// 💎 FIXED INPUT STYLE 
 const inputClass = `
   w-full bg-gray-50 dark:bg-[#111827] 
   border border-gray-200 dark:border-gray-800 
@@ -81,6 +80,23 @@ const inputClass = `
   focus:border-indigo-500 dark:focus:border-cyan-500
   transition-all placeholder-gray-400 dark:placeholder-gray-600
 `;
+
+// 🚀 SMART HELPER: Forces mapping based strictly on the text status first
+const resolveStatusCode = (status: string, remarkCode?: string, masterCode?: string) => {
+    let code = "";
+    if (status) {
+        const cStatus = status.toUpperCase().replace(/_/g, ' ');
+        const match = STATUS_OPTIONS.flatMap(g => g.options).find(o => o.label === cStatus);
+        
+        if (match) code = match.code;
+        else if (cStatus.includes('CREATED') || cStatus.includes('PENDING') || cStatus.includes('ORDER PLACED')) code = "99";
+        else if (cStatus.includes('IN TRANSIT') || cStatus.includes('IN-TRANSIT')) code = "102";
+        else if (cStatus.includes('DELIVERED')) code = "400";
+        else if (cStatus.includes('CANCEL')) code = "900";
+        else if (cStatus.includes('RTO')) code = "600";
+    }
+    return code || remarkCode || masterCode || "99";
+};
 
 export default function AdminShipmentDetail() {
   const { awb } = useParams();
@@ -136,9 +152,9 @@ export default function AdminShipmentDetail() {
           setShipment(payload.new);
           setStatus(payload.new.current_status);
           
-          // Real-time dropdown sync
-          if (payload.new.remark_status_code) setSelectedCode(payload.new.remark_status_code);
-          else if (payload.new.master_status_code) setSelectedCode(payload.new.master_status_code);
+          // 🚀 Sync dropdown via text status priority
+          const updatedCode = resolveStatusCode(payload.new.current_status, payload.new.remark_status_code, payload.new.master_status_code);
+          setSelectedCode(updatedCode);
           
           setReferenceId(payload.new.reference_id || ""); 
           if (payload.new.delivery_boy_id) setAssignedStaff(payload.new.delivery_boy_id);
@@ -167,20 +183,8 @@ export default function AdminShipmentDetail() {
       setAssignedStaff(shipData.delivery_boy_id || ""); 
       setReferenceId(shipData.reference_id || ""); 
       
-      // 🚀 BULLETPROOF INITIALIZATION: Ensure dropdown always matches DB state perfectly
-      let codeToSet = "99"; // Fallback
-      if (shipData.remark_status_code) { 
-          codeToSet = shipData.remark_status_code;
-      } else if (shipData.master_status_code) {
-          codeToSet = shipData.master_status_code;
-      } else if (shipData.current_status) {
-          const cStatus = shipData.current_status.toUpperCase();
-          const match = STATUS_OPTIONS.flatMap(g => g.options).find(o => o.label === cStatus);
-          if (match) codeToSet = match.code;
-          else if (cStatus === 'CREATED' || cStatus === 'ORDER_PLACED') codeToSet = "99";
-          else if (cStatus === 'IN_TRANSIT') codeToSet = "102";
-          else if (cStatus === 'DELIVERED') codeToSet = "400";
-      }
+      // 🚀 Prioritize mapping from 'current_status' first
+      const codeToSet = resolveStatusCode(shipData.current_status, shipData.remark_status_code, shipData.master_status_code);
       setSelectedCode(codeToSet);
 
       if (shipData.remark) setRemark(shipData.remark); 
@@ -445,7 +449,6 @@ export default function AdminShipmentDetail() {
                             onChange={(e) => {
                                 const newCode = e.target.value;
                                 setSelectedCode(newCode);
-                                // 🚀 Only auto-fills remark when manually changed in UI
                                 const match = STATUS_OPTIONS.flatMap(g => g.options).find(o => o.code === newCode);
                                 if (match) {
                                     setRemark(match.remark);
@@ -491,7 +494,6 @@ export default function AdminShipmentDetail() {
                         )}
                     </AnimatePresence>
 
-                    {/* 🆕 SHIPMENT REFERENCE BOX */}
                     <div>
                         <label className="text-[10px] text-gray-500 font-bold uppercase mb-1.5 block">Shipment Reference</label>
                         <div className="relative">
@@ -582,7 +584,6 @@ export default function AdminShipmentDetail() {
                 </button>
                 
                 <div className="border-t border-gray-100 dark:border-gray-800 my-4 pt-4 space-y-4">
-                    {/* 🚀 URL UPLOAD SECTION */}
                     <div>
                         <label className="text-[10px] text-gray-500 font-bold uppercase mb-1.5 block">Paste Image URL</label>
                         <div className="flex gap-2">
@@ -612,7 +613,6 @@ export default function AdminShipmentDetail() {
                         <div className="flex-grow border-t border-gray-200 dark:border-gray-800"></div>
                     </div>
 
-                    {/* 🚀 FILE UPLOAD SECTION */}
                     <label className="w-full flex flex-col items-center justify-center p-4 border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-xl cursor-pointer hover:border-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/10 transition-all group">
                         <Upload size={24} className="text-gray-400 group-hover:text-indigo-500 mb-2 transition-colors"/>
                         <span className="text-xs font-bold text-gray-500 group-hover:text-gray-700 dark:group-hover:text-gray-200">Upload Evidence File</span>
