@@ -2,39 +2,18 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import * as XLSX from "xlsx"; 
 import { 
   Package, Truck, CheckCircle, Clock, Search, 
-  RefreshCw, XCircle, Trash2, ArrowRight, FileUp, Settings, 
-  Table, Database, AlertTriangle, ShieldAlert
+  RefreshCw, XCircle, Trash2, ArrowRight, 
+  AlertTriangle, ShieldAlert, MapPin
 } from "lucide-react"; 
 import Link from "next/link";
-
-const DB_COLUMNS = [
-    { value: "current_status", label: "Shipment Status" },
-    { value: "payment_status", label: "Payment Status" },
-    { value: "weight", label: "Package Weight" },
-    { value: "delivery_boy_id", label: "Assign Staff (ID)" },
-    { value: "receiver_phone", label: "Receiver Phone" },
-    { value: "cost", label: "Shipping Cost" }
-];
 
 export default function AllShipmentsPage() {
   const [shipments, setShipments] = useState<any[]>([]);
   const [filterStatus, setFilterStatus] = useState("all");
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
-
-  // 🔹 Bulk Sync & Mapping States
-  const [bulkFile, setBulkFile] = useState<File | null>(null);
-  const [sheetHeaders, setSheetHeaders] = useState<string[]>([]);
-  
-  // ⚙️ Mapping Configuration
-  const [targetDbColumn, setTargetDbColumn] = useState("current_status"); 
-  const [excelRefCol, setExcelRefCol] = useState(""); 
-  const [excelValCol, setExcelValCol] = useState(""); 
-  
-  const [bulkLoading, setBulkLoading] = useState(false);
 
   const fetchAll = async () => {
     const { data } = await supabase
@@ -44,68 +23,6 @@ export default function AllShipmentsPage() {
     
     if (data) setShipments(data);
     setLoading(false);
-  };
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setBulkFile(file);
-
-    const reader = new FileReader();
-    reader.onload = (evt) => {
-        const bstr = evt.target?.result;
-        const wb = XLSX.read(bstr, { type: 'binary' });
-        const wsname = wb.SheetNames[0];
-        const ws = wb.Sheets[wsname];
-        
-        const data: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1 });
-        if (data && data.length > 0) {
-            const headers = data[0].map(String); 
-            setSheetHeaders(headers);
-            
-            const likelyRef = headers.find(h => /ref|id|order|awb/i.test(h));
-            const likelyVal = headers.find(h => /status|state|val/i.test(h));
-            
-            if (likelyRef) setExcelRefCol(likelyRef);
-            else if(headers.length > 0) setExcelRefCol(headers[0]);
-
-            if (likelyVal) setExcelValCol(likelyVal);
-            else if(headers.length > 1) setExcelValCol(headers[1]);
-        }
-    };
-    reader.readAsBinaryString(file);
-  };
-
-  const handleBulkSync = async () => {
-    if (!bulkFile || !excelRefCol || !excelValCol) return alert("Please map the Excel columns first.");
-    setBulkLoading(true);
-
-    try {
-        const formData = new FormData();
-        formData.append("file", bulkFile);
-        formData.append("targetDbColumn", targetDbColumn);
-        formData.append("excelRefCol", excelRefCol);
-        formData.append("excelValCol", excelValCol);
-
-        const res = await fetch("/api/admin/shipments/bulk-status", {
-            method: "POST",
-            body: formData
-        });
-        const data = await res.json();
-
-        if (data.error) throw new Error(data.error);
-
-        alert(`✅ Sync Complete!\nUpdated: ${data.results.success}\nFailed: ${data.results.failed}`);
-        
-        setBulkFile(null); 
-        setSheetHeaders([]);
-        fetchAll(); 
-    } catch (err: any) {
-        alert("Sync Error: " + err.message);
-    } finally {
-        setBulkLoading(false);
-    }
   };
 
   const handleDelete = async (id: string, awb: string) => {
@@ -122,7 +39,7 @@ export default function AllShipmentsPage() {
     return () => { supabase.removeChannel(channel); };
   }, []);
 
-  // 🚀 ULTRA-ROBUST FILTER LOGIC (Now includes RTO sub-states, Undelivered, Damage, Lost)
+  // 🚀 ULTRA-ROBUST FILTER LOGIC
   const checkStatusMatch = (tabId: string, statusRaw: string) => {
       if (tabId === 'all') return true;
       if (!statusRaw) return false;
@@ -133,13 +50,15 @@ export default function AllShipmentsPage() {
           case 'pending': 
               return ['created', 'manifested', 'pendingpickup', 'orderplaced'].includes(s);
           case 'intransit': 
-              return ['intransit', 'outfordelivery', 'pickedup'].includes(s) || (s.includes('transit') && !s.includes('rto'));
+              // Removed outfordelivery from here
+              return ['intransit', 'pickedup'].includes(s) || (s.includes('transit') && !s.includes('rto'));
+          case 'outfordelivery': 
+              return s.includes('outfordelivery');
           case 'delivered': 
               return ['delivered'].includes(s) && !s.includes('rto');
           case 'undelivered': 
               return s.includes('undelivered') && !s.includes('rto');
           case 'rto': 
-              // Catches rtoinitiated, rtointransit, rtoundelivered, rtodelivered
               return s.includes('rto');
           case 'exceptions':
               return s.includes('lost') || s.includes('damage') || s.includes('fail');
@@ -159,11 +78,11 @@ export default function AllShipmentsPage() {
     return matchesStatus && matchesSearch;
   });
 
-  // 🚀 UPDATED TABS LIST
   const tabs = [
     { id: "all", label: "All", icon: Package },
     { id: "pending", label: "Pending", icon: Clock },
     { id: "intransit", label: "Transit", icon: Truck },
+    { id: "outfordelivery", label: "Out for Delivery", icon: MapPin }, // 🚀 New Filter Tab
     { id: "delivered", label: "Delivered", icon: CheckCircle },
     { id: "undelivered", label: "Undelivered", icon: AlertTriangle },
     { id: "rto", label: "RTO", icon: RefreshCw },
@@ -185,7 +104,7 @@ export default function AllShipmentsPage() {
                   <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
                </span>
              </h1>
-             <p className="text-gray-500 dark:text-slate-400 text-sm font-medium mt-1">Live monitoring & bulk update tools.</p>
+             <p className="text-gray-500 dark:text-slate-400 text-sm font-medium mt-1">Real-time shipment tracking and control panel.</p>
           </div>
           
           <div className="relative group w-full md:w-auto">
@@ -200,95 +119,7 @@ export default function AllShipmentsPage() {
           </div>
         </div>
 
-        {/* 🚀 SMART DYNAMIC BULK SYNC PANEL */}
-        <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border border-gray-200 dark:border-slate-800 rounded-[2rem] p-8 shadow-2xl relative overflow-hidden group">
-            <div className="absolute -top-24 -right-24 w-64 h-64 bg-blue-500/10 dark:bg-blue-500/5 rounded-full blur-[80px] pointer-events-none" />
-
-            <div className="flex flex-col xl:flex-row items-start xl:items-end gap-8 relative z-10">
-                {/* Intro Section */}
-                <div className="flex items-center gap-5 shrink-0 xl:mb-2">
-                    <div className="p-4 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl text-white shadow-lg">
-                        <Settings size={28} />
-                    </div>
-                    <div>
-                        <h3 className="font-black text-xl text-gray-900 dark:text-white tracking-tight">Dynamic Bulk Sync</h3>
-                        <p className="text-sm text-gray-500 dark:text-slate-400 font-medium mt-0.5">Update database using Excel mapping.</p>
-                    </div>
-                </div>
-
-                {/* Controls */}
-                <div className="flex-1 w-full grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
-                    
-                    {/* 1. File Upload */}
-                    <div className="space-y-2">
-                        <label className="text-[10px] font-black text-gray-400 dark:text-slate-500 uppercase ml-1 tracking-widest">1. Upload Excel</label>
-                        <label className={`relative group cursor-pointer block ${bulkFile ? 'opacity-100' : 'opacity-100'}`}>
-                            <input type="file" accept=".xlsx, .xls, .csv" className="hidden" onChange={handleFileChange} />
-                            <div className={`flex items-center gap-3 px-4 py-3 bg-gray-50 dark:bg-slate-800/50 border border-dashed rounded-xl text-sm transition-all ${bulkFile ? 'border-emerald-500 bg-emerald-50/10 text-emerald-600' : 'border-gray-300 dark:border-slate-700 text-gray-500'}`}>
-                                <FileUp size={18} />
-                                <span className="truncate max-w-[140px] font-bold">{bulkFile ? bulkFile.name : "Select File"}</span>
-                            </div>
-                        </label>
-                    </div>
-
-                    {/* 2. Match Ref */}
-                    <div className={`space-y-2 transition-opacity duration-500 ${sheetHeaders.length > 0 ? 'opacity-100' : 'opacity-30 pointer-events-none'}`}>
-                        <label className="text-[10px] font-black text-gray-400 dark:text-slate-500 uppercase ml-1 tracking-widest flex items-center gap-1">
-                            <Search size={10}/> Excel: Match Ref By
-                        </label>
-                        <select 
-                            value={excelRefCol}
-                            onChange={(e) => setExcelRefCol(e.target.value)}
-                            className="w-full bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl p-3 text-sm font-medium outline-none focus:ring-2 focus:ring-blue-500/20"
-                        >
-                            {sheetHeaders.map(h => <option key={h} value={h}>{h}</option>)}
-                        </select>
-                    </div>
-
-                    {/* 3. New Value */}
-                    <div className={`space-y-2 transition-opacity duration-500 ${sheetHeaders.length > 0 ? 'opacity-100' : 'opacity-30 pointer-events-none'}`}>
-                        <label className="text-[10px] font-black text-gray-400 dark:text-slate-500 uppercase ml-1 tracking-widest flex items-center gap-1">
-                            <Table size={10}/> Excel: Status/Value
-                        </label>
-                        <select 
-                            value={excelValCol}
-                            onChange={(e) => setExcelValCol(e.target.value)}
-                            className="w-full bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl p-3 text-sm font-medium outline-none focus:ring-2 focus:ring-blue-500/20"
-                        >
-                            {sheetHeaders.map(h => <option key={h} value={h}>{h}</option>)}
-                        </select>
-                    </div>
-
-                    {/* 4. Target */}
-                    <div className="flex gap-2">
-                        <div className="space-y-2 flex-1">
-                            <label className="text-[10px] font-black text-gray-400 dark:text-slate-500 uppercase ml-1 tracking-widest flex items-center gap-1">
-                                <Database size={10}/> Database Field
-                            </label>
-                            <select 
-                                value={targetDbColumn}
-                                onChange={(e) => setTargetDbColumn(e.target.value)}
-                                className="w-full bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl p-3 text-sm font-medium outline-none focus:ring-2 focus:ring-blue-500/20"
-                            >
-                                {DB_COLUMNS.map(col => <option key={col.value} value={col.value}>{col.label}</option>)}
-                            </select>
-                        </div>
-                        
-                        <button 
-                            onClick={handleBulkSync}
-                            disabled={bulkLoading || !bulkFile || !excelRefCol || !excelValCol}
-                            className="h-[46px] w-[46px] mt-auto bg-blue-600 hover:bg-blue-500 disabled:bg-gray-100 dark:disabled:bg-slate-800/50 disabled:text-gray-400 text-white rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/20 transition-all shrink-0"
-                            title="Run Sync"
-                        >
-                            {bulkLoading ? <RefreshCw className="animate-spin" size={20}/> : <ArrowRight size={20} />}
-                        </button>
-                    </div>
-
-                </div>
-            </div>
-        </div>
-
-        {/* 🔵 FILTER TABS & TABLE */}
+        {/* 🔵 FILTER TABS */}
         <div className="flex flex-wrap gap-2 border-b border-gray-200 dark:border-slate-800 pb-1">
           {tabs.map((tab) => {
              const Icon = tab.icon;
@@ -315,6 +146,7 @@ export default function AllShipmentsPage() {
           })}
         </div>
 
+        {/* 📦 TABLE */}
         <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-3xl overflow-hidden shadow-xl min-h-[400px]">
           <div className="overflow-x-auto">
               <table className="w-full text-left text-gray-600 dark:text-slate-300">
@@ -374,7 +206,6 @@ export default function AllShipmentsPage() {
   );
 }
 
-// 🚀 ULTRA-ROBUST BADGE LOGIC (Including new RTO/Lost/Damage states)
 function StatusBadge({ status }: { status: string }) {
     if (!status) return <span className="px-3 py-1 rounded-lg border text-[10px] font-bold uppercase tracking-wide bg-gray-100 text-gray-600 dark:bg-slate-800 dark:text-slate-400 border-gray-200 dark:border-slate-700">UNKNOWN</span>;
     
@@ -392,7 +223,6 @@ function StatusBadge({ status }: { status: string }) {
     } else if (s.includes('delivered') && !s.includes('rto')) {
         styleClass = "bg-emerald-100 text-emerald-700 dark:bg-green-900/30 dark:text-green-400 border-emerald-200 dark:border-green-900/50";
     } else if (s.includes('rto')) {
-        // Red for RTO undelivered/lost, Orange for standard RTO movement
         styleClass = s.includes('undelivered') || s.includes('fail') 
             ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border-red-200 dark:border-red-900/50"
             : "bg-orange-200 text-orange-800 dark:bg-orange-900/50 dark:text-orange-300 border-orange-300 dark:border-orange-800";

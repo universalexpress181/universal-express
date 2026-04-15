@@ -122,6 +122,21 @@ export default function CreateShipmentPage() {
 
       if (insertError) throw insertError;
 
+      // 🚀 NEW: Trigger Email Notification
+      try {
+        await fetch('/api/notify-admin', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            awb: internalAwb, 
+            sender_name: senderData.name,
+            identical_package_count: 1 // Defaulting to 1 for this form
+          })
+        });
+      } catch (notifyErr) {
+        console.error("Failed to send admin email notification:", notifyErr);
+      }
+
       // 🎯 SHOW MODAL INSTEAD OF ALERT
       setGeneratedAWB(internalAwb);
       setShowModal(true);

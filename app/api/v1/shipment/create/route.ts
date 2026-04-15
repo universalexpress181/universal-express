@@ -1,11 +1,15 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
+import { Resend } from 'resend';
 
 // Initialize Supabase Admin Client
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
+
+// Initialize Resend
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 export async function POST(request: Request) {
   let userId = null;
@@ -116,7 +120,6 @@ export async function POST(request: Request) {
 
         const labelUrls = [];
 
-        // ✅ UPDATED TO PDF API
         if (packageCount === 1) {
             labelUrls.push(`${process.env.NEXT_PUBLIC_SITE_URL}/api/label?awb=${awb}`);
         } else {
@@ -125,7 +128,6 @@ export async function POST(request: Request) {
             }
         }
 
-        // ✅ UPDATED MASTER LINK
         const masterLabelUrl = packageCount > 1 
             ? `${process.env.NEXT_PUBLIC_SITE_URL}/api/label?awb=${awb}&all=true` 
             : labelUrls[0];
@@ -150,6 +152,56 @@ export async function POST(request: Request) {
     if (insertError) throw insertError;
 
     await supabaseAdmin.rpc('increment_key_usage', { key_id: keyData.id });
+
+    // 🚀 NEW: Batched Email Notification (One single email for all shipments)
+    try {
+      // 1. Map all shipments into HTML table rows
+      const shipmentRows = insertData.map(shipment => `
+        <tr style="border-bottom: 1px solid #eee;">
+          <td style="padding: 10px; font-family: monospace; font-weight: bold; color: #2563eb;">${shipment.awb_code}</td>
+          <td style="padding: 10px;">${shipment.sender_name}</td>
+          <td style="padding: 10px;">${shipment.receiver_city}</td>
+          <td style="padding: 10px; text-align: center;">${shipment.identical_package_count}</td>
+        </tr>
+      `).join('');
+
+      // 2. Determine subject based on count
+      const isBulk = insertData.length > 1;
+      const emailSubject = isBulk 
+        ? `🚨 Bulk API Booking: ${insertData.length} Shipments`
+        : `🚨 API Booking: ${insertData[0].awb_code}`;
+
+      // 3. Send ONE email containing the table
+      await resend.emails.send({
+        from: 'Admin Alerts <onboarding@resend.dev>', // Update with your domain later
+        to: 'YOUR_ADMIN_EMAIL@gmail.com', // 👈 CHANGE THIS
+        subject: emailSubject,
+        html: `
+          <div style="font-family: sans-serif; padding: 20px; color: #333;">
+            <h2 style="color: #2563eb;">New Shipments Booked (via API)</h2>
+            <p><strong>Total Bookings:</strong> ${insertData.length}</p>
+            
+            <table style="text-align: left; border-collapse: collapse; width: 100%; max-width: 600px; margin-top: 15px;">
+              <thead>
+                <tr style="background-color: #f8fafc; border-bottom: 2px solid #cbd5e1;">
+                  <th style="padding: 10px;">AWB Number</th>
+                  <th style="padding: 10px;">Sender</th>
+                  <th style="padding: 10px;">Destination</th>
+                  <th style="padding: 10px; text-align: center;">Boxes</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${shipmentRows}
+              </tbody>
+            </table>
+            
+            <p style="margin-top: 20px; font-size: 12px; color: #64748b;">This is an automated notification from Universal Express.</p>
+          </div>
+        `,
+      });
+    } catch (notifyErr) {
+      console.error("Failed to send bulk API admin email notification:", notifyErr);
+    }
 
     return NextResponse.json({
         success: true,

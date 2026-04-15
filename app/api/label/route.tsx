@@ -11,65 +11,64 @@ const supabase = createClient(
 );
 
 // ---------------------------------------------------------------------------
-// A4 PIXEL-PERFECT STYLESHEET (Scaled 2x to fill an A4 sheet)
+// PIXEL-PERFECT STYLESHEET
 // ---------------------------------------------------------------------------
 const styles = StyleSheet.create({
-  page: { backgroundColor: '#ffffff', fontFamily: 'Helvetica', padding: 16 }, 
-  // 🚀 FIXED: Removed hardcoded width/height so it fills the A4 page automatically
-  container: { borderWidth: 4, borderColor: '#000000', flex: 1, padding: 16, flexDirection: 'column' },
+  page: { backgroundColor: '#ffffff', fontFamily: 'Helvetica', padding: 8 }, 
+  container: { borderWidth: 2, borderColor: '#000000', flex: 1, padding: 8, flexDirection: 'column' },
 
   // --- TOP SECTION ---
   topSection: { flexShrink: 0 },
-  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', borderBottomWidth: 3, borderColor: '#000000', paddingBottom: 12, marginBottom: 8 },
-  brandTitle: { fontSize: 44, fontWeight: 'bold', textTransform: 'uppercase' },
-  brandSub: { fontSize: 14, fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: 2, marginTop: 4 },
+  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', borderBottomWidth: 2, borderColor: '#000000', paddingBottom: 6, marginBottom: 4 },
+  brandTitle: { fontSize: 22, fontWeight: 'bold', textTransform: 'uppercase' },
+  brandSub: { fontSize: 7, fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: 1, marginTop: 2 },
   headerRight: { alignItems: 'flex-end' },
-  headerText: { fontSize: 14, fontWeight: 'bold', marginBottom: 4 },
-  boxBadge: { backgroundColor: '#000000', color: '#ffffff', paddingHorizontal: 8, paddingVertical: 4, fontSize: 14, fontWeight: 'bold', textTransform: 'uppercase' },
+  headerText: { fontSize: 7, fontWeight: 'bold', marginBottom: 2 },
+  boxBadge: { backgroundColor: '#000000', color: '#ffffff', paddingHorizontal: 4, paddingVertical: 2, fontSize: 7, fontWeight: 'bold', textTransform: 'uppercase' },
 
-  awbContainer: { alignItems: 'center', marginBottom: 8 },
-  awbText: { fontSize: 52, fontWeight: 'bold', fontFamily: 'Courier-Bold' },
-  deliveryText: { fontSize: 14, fontWeight: 'bold', textTransform: 'uppercase', marginTop: 4 },
+  awbContainer: { alignItems: 'center', marginBottom: 4 },
+  awbText: { fontSize: 26, fontWeight: 'bold', fontFamily: 'Courier-Bold' },
+  deliveryText: { fontSize: 7, fontWeight: 'bold', textTransform: 'uppercase', marginTop: 2 },
   
-  dashedBoxWrap: { marginTop: 8, alignItems: 'center' },
-  totalPkgBox: { borderWidth: 3, borderColor: '#000000', borderStyle: 'dashed', paddingHorizontal: 16, paddingVertical: 6, backgroundColor: '#f9fafb', flexDirection: 'row', alignItems: 'center' },
-  totalPkgLabel: { fontSize: 16, fontWeight: 'bold', textTransform: 'uppercase', marginRight: 12 },
-  totalPkgValue: { fontSize: 28, fontWeight: 'bold' },
+  dashedBoxWrap: { marginTop: 4, alignItems: 'center' },
+  totalPkgBox: { borderWidth: 2, borderColor: '#000000', borderStyle: 'dashed', paddingHorizontal: 8, paddingVertical: 3, backgroundColor: '#f9fafb', flexDirection: 'row', alignItems: 'center' },
+  totalPkgLabel: { fontSize: 8, fontWeight: 'bold', textTransform: 'uppercase', marginRight: 6 },
+  totalPkgValue: { fontSize: 14, fontWeight: 'bold' },
 
   // --- MIDDLE SECTION (Addresses) ---
-  middleSection: { flex: 1, justifyContent: 'center', paddingTop: 4, gap: 10 }, 
+  middleSection: { flex: 1, justifyContent: 'center', paddingTop: 2, gap: 5 }, 
 
   // Deliver Box
-  addressBox: { borderWidth: 3, borderColor: '#000000', borderRadius: 8, padding: 16, paddingTop: 24, position: 'relative' },
-  badgeWrap: { position: 'absolute', top: -10, left: 24, backgroundColor: '#ffffff', paddingHorizontal: 8 },
-  badgeText: { fontSize: 14, fontWeight: 'bold', textTransform: 'uppercase' },
+  addressBox: { borderWidth: 2, borderColor: '#000000', borderRadius: 6, padding: 8, paddingTop: 12, position: 'relative' },
+  badgeWrap: { position: 'absolute', top: -6, left: 12, backgroundColor: '#ffffff', paddingHorizontal: 4 },
+  badgeText: { fontSize: 8, fontWeight: 'bold', textTransform: 'uppercase' },
 
-  receiverName: { fontSize: 28, fontWeight: 'bold', textTransform: 'uppercase', marginBottom: 4 },
-  receiverAddr: { fontSize: 16, marginBottom: 12, color: '#333333', lineHeight: 1.3 },
-  receiverBottomRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', borderTopWidth: 2, borderColor: '#e5e7eb', paddingTop: 8, marginTop: 4 },
-  telText: { fontSize: 16, fontWeight: 'bold' },
+  receiverName: { fontSize: 14, fontWeight: 'bold', textTransform: 'uppercase', marginBottom: 2 },
+  receiverAddr: { fontSize: 9, marginBottom: 6, color: '#333333', lineHeight: 1.2 },
+  receiverBottomRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', borderTopWidth: 1, borderColor: '#e5e7eb', paddingTop: 4, marginTop: 2 },
+  telText: { fontSize: 9, fontWeight: 'bold' },
   rightAlign: { alignItems: 'flex-end' },
-  cityText: { fontSize: 24, fontWeight: 'bold', textTransform: 'uppercase' },
-  pinText: { fontSize: 24, fontWeight: 'bold', marginTop: 4 },
+  cityText: { fontSize: 12, fontWeight: 'bold', textTransform: 'uppercase' },
+  pinText: { fontSize: 12, fontWeight: 'bold', marginTop: 2 },
 
-  // Return To Box
-  returnBox: { borderWidth: 3, borderColor: '#000000', borderRadius: 8, padding: 16, paddingTop: 24, position: 'relative' },
-  senderName: { fontSize: 20, fontWeight: 'bold', textTransform: 'uppercase', marginBottom: 6 },
-  senderAddr: { fontSize: 16, marginBottom: 8, color: '#333333', lineHeight: 1.3 },
-  senderTel: { fontSize: 16, fontWeight: 'bold', marginTop: 4 },
+  // 🚀 REFINED: Return To Box
+  returnBox: { borderWidth: 2, borderColor: '#000000', borderRadius: 6, padding: 8, paddingTop: 12, position: 'relative' },
+  senderName: { fontSize: 11, fontWeight: 'bold', textTransform: 'uppercase', marginBottom: 3 },
+  senderAddr: { fontSize: 9, marginBottom: 4, color: '#333333', lineHeight: 1.2 },
+  senderTel: { fontSize: 9, fontWeight: 'bold', marginTop: 2 },
 
   // --- BOTTOM SECTION ---
-  bottomSection: { flexShrink: 0, borderTopWidth: 3, borderColor: '#000000', paddingTop: 12, marginTop: 8 },
-  paymentRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-  paymentLabel: { fontSize: 14, fontWeight: 'bold', textTransform: 'uppercase', marginBottom: 4 },
-  paymentMode: { fontSize: 28, fontWeight: 'bold', textTransform: 'uppercase' },
+  bottomSection: { flexShrink: 0, borderTopWidth: 2, borderColor: '#000000', paddingTop: 6, marginTop: 4 },
+  paymentRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
+  paymentLabel: { fontSize: 7, fontWeight: 'bold', textTransform: 'uppercase', marginBottom: 2 },
+  paymentMode: { fontSize: 14, fontWeight: 'bold', textTransform: 'uppercase' },
   
-  codBox: { borderWidth: 3, borderColor: '#000000', backgroundColor: '#000000', paddingHorizontal: 24, paddingVertical: 12, alignItems: 'center', minWidth: 160 },
-  collectCashText: { color: '#ffffff', fontSize: 12, fontWeight: 'bold', textTransform: 'uppercase', marginBottom: 4, letterSpacing: 2 },
-  codAmount: { fontSize: 28, fontWeight: 'bold', color: '#ffffff', letterSpacing: 2 },
+  codBox: { borderWidth: 2, borderColor: '#000000', backgroundColor: '#000000', paddingHorizontal: 12, paddingVertical: 6, alignItems: 'center', minWidth: 90 },
+  collectCashText: { color: '#ffffff', fontSize: 7, fontWeight: 'bold', textTransform: 'uppercase', marginBottom: 2, letterSpacing: 1 },
+  codAmount: { fontSize: 16, fontWeight: 'bold', color: '#ffffff', letterSpacing: 1 },
 
-  barcodeContainer: { alignItems: 'center', width: '100%', marginTop: 4 },
-  barcodeImg: { width: 180, height: 40 }, 
+  barcodeContainer: { alignItems: 'center', width: '100%', marginTop: 2 },
+  barcodeImg: { width: 160, height: 35 }, 
 });
 
 // ---------------------------------------------------------------------------
@@ -82,8 +81,7 @@ const LabelDocument = ({ shipment, barcodeImg, printAll }: any) => {
   return (
     <Document>
       {pieces.map((piece) => (
-        // 🚀 Natively set to A4 size
-        <Page key={piece} size="A4" style={styles.page}>
+        <Page key={piece} size={[288, 432]} style={styles.page}>
           <View style={styles.container}>
             
             <View style={styles.topSection}>
@@ -182,7 +180,7 @@ export async function GET(request: Request) {
     if (error || !shipment) return new NextResponse("Shipment not found", { status: 404 });
 
     const barcodeBuffer = await bwipjs.toBuffer({
-      bcid: 'code128', text: shipment.awb_code, scale: 5, height: 20, includetext: false, backgroundcolor: 'ffffff'
+      bcid: 'code128', text: shipment.awb_code, scale: 3, height: 15, includetext: false, backgroundcolor: 'ffffff'
     });
     const barcodeImg = `data:image/png;base64,${barcodeBuffer.toString('base64')}`;
 

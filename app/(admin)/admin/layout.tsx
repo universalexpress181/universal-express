@@ -9,9 +9,10 @@ import { supabase } from "@/lib/supabase";
 import { 
   Box, LogOut, Loader2, Users, 
   UserCheck, Menu, X, Building2, Package, Moon, Sun, ShieldAlert,
-  Settings2, Database // 🆕 Added Database for AWB Bank
+  Settings2, Database, Layers 
 } from "lucide-react";
 import LogoutOnBack from "@/components/LogoutOnBack"; 
+import NotificationBell from "@/components/NotificationBell"; // 🚀 ADDED IMPORT
 import { motion, AnimatePresence } from "framer-motion";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -124,9 +125,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             </div>
             <div className="text-red-600 font-black tracking-tighter flex items-center gap-2">ADMIN</div>
         </div>
-        <motion.button whileTap={{ scale: 0.9 }} onClick={() => setSidebarOpen(!sidebarOpen)} className="p-2 text-slate-500 dark:text-red-500">
-          {sidebarOpen ? <X size={24} /> : <Menu size={24} />}
-        </motion.button>
+        <div className="flex items-center gap-3">
+            {/* 🚀 ADDED: Notification Bell for Mobile */}
+            <NotificationBell />
+            <motion.button whileTap={{ scale: 0.9 }} onClick={() => setSidebarOpen(!sidebarOpen)} className="p-2 text-slate-500 dark:text-red-500">
+              {sidebarOpen ? <X size={24} /> : <Menu size={24} />}
+            </motion.button>
+        </div>
       </div>
 
       {/* 🌑 Mobile Overlay */}
@@ -164,8 +169,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           <NavLink href="/admin/shipments" icon={<Box size={20} />} label="All Shipments" currentPath={pathname} />
           <NavLink href="/admin/generator" icon={<Settings2 size={20} />} label="Shipment Generator" currentPath={pathname} />
           
-          {/* 🆕 ADDED ADVANCED AWB UPLOAD LINK */}
           <NavLink href="/admin/awb-bank" icon={<Database size={20} />} label="Advanced AWB Upload" currentPath={pathname} />
+          
+          {/* 🆕 ADDED BULK OPERATION LINK */}
+          <NavLink href="/admin/bulkoperations" icon={<Layers size={20} />} label="Bulk Operation" currentPath={pathname} />
 
           <NavLink href="/admin/sellers" icon={<Building2 size={20} />} label="B2B Partners" currentPath={pathname} />
           <NavLink href="/admin/users" icon={<Users size={20} />} label="Customers" currentPath={pathname} />
@@ -216,6 +223,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       {/* 📄 Main Content */}
       <div className="flex-1 flex flex-col h-full overflow-hidden relative z-0">
           <div className="h-16 md:hidden flex-shrink-0"></div> 
+          
+          {/* 🚀 ADDED: Notification Bell for Desktop (Floating Top Right) */}
+          <div className="hidden md:block absolute top-6 right-8 z-50">
+              <NotificationBell />
+          </div>
           
           <main className="flex-1 overflow-y-auto p-4 md:p-8 scroll-smooth">
             <motion.div
